@@ -1,5 +1,5 @@
-import MoodlyApp from "./MoodlyApp";
+import MortgageXAIApp from "./MortgageXAIApp";
 
 export default function Home() {
-  return <MoodlyApp />;
+  return <MortgageXAIApp />;
 }

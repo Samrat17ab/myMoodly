@@ -5,21 +5,21 @@ import "./globals.css";
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Moodly - Feel it. Share it. Let it move.",
+  title: "Mortgage XAI Studio",
   description:
-    "Private, anonymous, mood-based conversations with someone who gets where you are.",
+    "A mortgage-specific hybrid explainability workbench for evidence, local rules, recourse, and audit.",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
   openGraph: {
-    title: "Moodly - Feel it. Share it. Let it move.",
-    description: "Anonymous conversations for how you really feel.",
+    title: "Mortgage XAI Studio",
+    description: "Evidence you can act on. Decisions you can audit.",
     type: "website",
-    images: [{ url: "/og.png", width: 1734, height: 907, alt: "Moodly - anonymous conversations for how you really feel" }],
+    images: [{ url: "/mortgage-xai-og.png", width: 1734, height: 907, alt: "Mortgage XAI Studio explanation pathway" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Moodly - Feel it. Share it. Let it move.",
-    description: "Anonymous conversations for how you really feel.",
-    images: ["/og.png"],
+    title: "Mortgage XAI Studio",
+    description: "Evidence you can act on. Decisions you can audit.",
+    images: ["/mortgage-xai-og.png"],
   },
 };
 
