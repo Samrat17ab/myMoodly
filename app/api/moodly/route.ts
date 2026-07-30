@@ -1,4 +1,9 @@
+import { env } from "cloudflare:workers";
 import { ensureDbSchema, getD1 } from "@/db";
+import {
+  authenticatedRequestEmail,
+  type AccessAuthEnv,
+} from "@/worker/access-auth";
 
 type ProfilePayload = {
   age?: string | number;
@@ -13,19 +18,6 @@ function cleanEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
-function requestEmail(request: Request, fallback: unknown) {
-  const platformEmail = cleanEmail(
-    request.headers.get("oai-authenticated-user-email"),
-  );
-  if (platformEmail) return platformEmail;
-
-  const hostname = new URL(request.url).hostname;
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return cleanEmail(fallback);
-  }
-  return "";
-}
-
 function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }
@@ -38,8 +30,9 @@ function errorResponse(error: unknown) {
 export async function GET(request: Request) {
   try {
     await ensureDbSchema();
-    const email = requestEmail(
+    const email = await authenticatedRequestEmail(
       request,
+      env as unknown as AccessAuthEnv,
       new URL(request.url).searchParams.get("email"),
     );
     if (!email) return jsonError("Authentication required", 401);
@@ -92,7 +85,11 @@ export async function POST(request: Request) {
     await ensureDbSchema();
     const payload = (await request.json()) as Record<string, unknown>;
     const type = payload.type;
-    const email = requestEmail(request, payload.email);
+    const email = await authenticatedRequestEmail(
+      request,
+      env as unknown as AccessAuthEnv,
+      payload.email,
+    );
     if (!email) return jsonError("Authentication required", 401);
 
     const d1 = getD1();

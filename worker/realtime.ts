@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
+import type { AccessAuthEnv } from "./access-auth";
 
-export interface RealtimeEnv {
+export interface RealtimeEnv extends AccessAuthEnv {
   DB: D1Database;
   MATCHMAKER: DurableObjectNamespace<Matchmaker>;
   CHAT_ROOMS: DurableObjectNamespace<ChatRoom>;
