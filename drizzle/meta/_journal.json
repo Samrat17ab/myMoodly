@@ -8,6 +8,13 @@
       "when": 1785403940653,
       "tag": "0000_wealthy_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785405597606,
+      "tag": "0001_polite_scrambler",
+      "breakpoints": true
     }
   ]
 }

@@ -74,6 +74,50 @@ export function ensureDbSchema() {
       d1.prepare(
         "CREATE INDEX IF NOT EXISTS conversation_surveys_check_in_idx ON conversation_surveys (check_in_id)",
       ),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS matchmaking_tickets (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_email TEXT NOT NULL REFERENCES profiles(email) ON DELETE CASCADE,
+        check_in_id TEXT NOT NULL REFERENCES check_ins(id) ON DELETE CASCADE,
+        match_mode TEXT NOT NULL,
+        quadrant TEXT NOT NULL,
+        languages TEXT NOT NULL,
+        status TEXT NOT NULL,
+        conversation_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS conversations (
+        id TEXT PRIMARY KEY NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        ended_at TEXT
+      )`),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS conversation_members (
+        conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        user_email TEXT NOT NULL REFERENCES profiles(email) ON DELETE CASCADE,
+        anonymous_name TEXT NOT NULL,
+        joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (conversation_id, user_email)
+      )`),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS conversation_messages (
+        id TEXT PRIMARY KEY NOT NULL,
+        conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        sender_email TEXT NOT NULL REFERENCES profiles(email) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS matchmaking_tickets_status_created_idx ON matchmaking_tickets (status, created_at)",
+      ),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS matchmaking_tickets_user_idx ON matchmaking_tickets (user_email)",
+      ),
+      d1.prepare(
+        "CREATE UNIQUE INDEX IF NOT EXISTS conversation_members_user_conversation_idx ON conversation_members (user_email, conversation_id)",
+      ),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS conversation_messages_room_created_idx ON conversation_messages (conversation_id, created_at)",
+      ),
     ]);
   })().catch((error) => {
     schemaReady = null;

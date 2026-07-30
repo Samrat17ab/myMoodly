@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Quadrant = "red" | "yellow" | "green" | "blue";
 type Profile = {
@@ -10,6 +10,18 @@ type Profile = {
   country: string;
   languages: string[];
   terms: boolean;
+};
+type ChatMessage = {
+  id: string;
+  mine: boolean;
+  text: string;
+  time: string;
+};
+type RealtimePacket = {
+  type?: "ready" | "message" | "presence" | "ended" | "error";
+  history?: ChatMessage[];
+  message?: ChatMessage | string;
+  online?: number;
 };
 type View =
   | "welcome" | "auth" | "onboarding" | "home" | "energy" | "pleasantness"
@@ -41,6 +53,14 @@ async function saveMoodlyData(payload: Record<string, unknown>) {
   }));
 }
 
+async function matchRequest(payload: Record<string, unknown>) {
+  return readApiResponse(await fetch("/api/match", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  }));
+}
+
 export default function MoodlyApp() {
   const [view, setView] = useState<View>("welcome");
   const [prior, setPrior] = useState<View>("home");
@@ -51,22 +71,26 @@ export default function MoodlyApp() {
   const [note, setNote] = useState("");
   const [mode, setMode] = useState<"similar"|"different">("similar");
   const [queueSeconds, setQueueSeconds] = useState(0);
-  const [usage, setUsage] = useState(3);
+  const [usage, setUsage] = useState(0);
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [email, setEmail] = useState("");
   const [magicSent, setMagicSent] = useState(false);
   const [chatSeconds, setChatSeconds] = useState(1200);
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([
-    { mine:false, text:"Hey — I’m here. No pressure to start perfectly.", time:"Now" }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [menu, setMenu] = useState(false);
   const [report, setReport] = useState(false);
   const [reportDone, setReportDone] = useState(false);
   const [toast, setToast] = useState("");
   const [survey, setSurvey] = useState({ understood:"", change:"" });
   const [checkInId, setCheckInId] = useState("");
+  const [ticketId, setTicketId] = useState("");
+  const [conversationId, setConversationId] = useState("");
+  const [partnerName, setPartnerName] = useState("Anonymous partner");
+  const [socketStatus, setSocketStatus] = useState<"connecting"|"live"|"offline">("offline");
+  const [onlineCount, setOnlineCount] = useState(0);
   const noteRef = useRef<HTMLTextAreaElement>(null);
+  const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -76,16 +100,95 @@ export default function MoodlyApp() {
   useEffect(() => {
     if (view !== "queue") return;
     const tick = setInterval(() => setQueueSeconds(s => s + 1), 1000);
-    const found = setTimeout(() => { setUsage(u => u + 1); setChatSeconds(1200); setView("chat"); }, 4200);
-    return () => { clearInterval(tick); clearTimeout(found); };
-  }, [view]);
+    if (!ticketId) return () => clearInterval(tick);
+
+    let active = true;
+    const checkStatus = async () => {
+      try {
+        const data = await matchRequest({ action:"status", ticketId, email });
+        if (!active) return;
+        if (data.status === "matched" && data.conversationId) {
+          active = false;
+          setConversationId(String(data.conversationId));
+          setPartnerName(String(data.partnerName ?? "Anonymous partner"));
+          setUsage(value => value + 1);
+          setChatSeconds(1200);
+          setMessages([]);
+          setView("chat");
+        } else if (data.status === "expired" || data.status === "cancelled") {
+          active = false;
+          setToast("No match was found this time. You can try again.");
+          setView("mode");
+        }
+      } catch (error) {
+        if (active) setToast(error instanceof Error ? error.message : "Could not check your match.");
+      }
+    };
+    void checkStatus();
+    const poll = setInterval(() => void checkStatus(), 1200);
+    return () => {
+      active = false;
+      clearInterval(tick);
+      clearInterval(poll);
+    };
+  }, [view, ticketId, email]);
   useEffect(() => {
     if (view !== "chat") return;
     const tick = setInterval(() => setChatSeconds(s => Math.max(0, s - 1)), 1000);
     return () => clearInterval(tick);
   }, [view]);
+  useEffect(() => {
+    if (view !== "chat" || !conversationId) return;
+    let stopped = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const q = useMemo<Quadrant>(() => energy === "high" ? (pleasant ? "yellow" : "red") : (pleasant ? "green" : "blue"), [energy, pleasant]);
+    const connect = () => {
+      if (stopped) return;
+      setSocketStatus("connecting");
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const url = new URL(`${protocol}//${window.location.host}/api/realtime`);
+      url.searchParams.set("conversationId", conversationId);
+      url.searchParams.set("email", email);
+      const socket = new WebSocket(url);
+      socketRef.current = socket;
+
+      socket.onopen = () => setSocketStatus("live");
+      socket.onmessage = (event) => {
+        const payload = JSON.parse(String(event.data)) as RealtimePacket;
+        if (payload.type === "ready" && Array.isArray(payload.history)) {
+          setMessages(payload.history as ChatMessage[]);
+        } else if (payload.type === "message" && typeof payload.message === "object") {
+          const incoming = payload.message as ChatMessage;
+          setMessages(current =>
+            current.some(item => item.id === incoming.id)
+              ? current
+              : [...current, incoming],
+          );
+        } else if (payload.type === "presence") {
+          setOnlineCount(Number(payload.online ?? 0));
+        } else if (payload.type === "ended") {
+          setToast("The conversation has ended.");
+          setView("survey");
+        } else if (payload.type === "error") {
+          setToast(typeof payload.message === "string" ? payload.message : "Realtime chat error.");
+        }
+      };
+      socket.onerror = () => setSocketStatus("offline");
+      socket.onclose = () => {
+        setSocketStatus("offline");
+        if (!stopped) reconnectTimer = setTimeout(connect, 1500);
+      };
+    };
+
+    connect();
+    return () => {
+      stopped = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      socketRef.current?.close(1000, "Leaving conversation");
+      socketRef.current = null;
+    };
+  }, [view, conversationId, email]);
+
   const openOverlay = (v: View) => { setPrior(view); setView(v); setMenu(false); };
   const continueFromPleasant = (value:boolean) => { setPleasant(value); const next = energy === "high" ? (value ? "yellow":"red") : (value ? "green":"blue"); setQuadrant(next); setView("emotion"); };
   const chooseEmotion = (word:string) => { setEmotion(word); setView("context"); setTimeout(() => noteRef.current?.focus(), 80); };
@@ -123,22 +226,61 @@ export default function MoodlyApp() {
         type:"check-in", email, energy, pleasant, quadrant, emotion, note,
         matchMode:mode,
       });
-      setCheckInId(String(data.id));
+      const nextCheckInId = String(data.id);
+      setCheckInId(nextCheckInId);
+      const match = await matchRequest({
+        action:"join",
+        email,
+        checkInId:nextCheckInId,
+        matchMode:mode,
+        quadrant,
+        languages:profile.languages,
+      });
+      setTicketId(String(match.ticketId));
       setQueueSeconds(0);
-      setView("queue");
+      if (match.status === "matched" && match.conversationId) {
+        setConversationId(String(match.conversationId));
+        setPartnerName(String(match.partnerName ?? "Anonymous partner"));
+        setUsage(value => value + 1);
+        setChatSeconds(1200);
+        setMessages([]);
+        setView("chat");
+      } else {
+        setView("queue");
+      }
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "Could not save your check-in.");
+      setToast(error instanceof Error ? error.message : "Could not start matchmaking.");
+    }
+  };
+  const cancelQueue = async () => {
+    try {
+      const result = ticketId
+        ? await matchRequest({ action:"cancel", ticketId, email })
+        : { status:"cancelled" };
+      if (result.status === "matched" && result.conversationId) {
+        setConversationId(String(result.conversationId));
+        setPartnerName(String(result.partnerName ?? "Anonymous partner"));
+        setUsage(value => value + 1);
+        setChatSeconds(1200);
+        setMessages([]);
+        setView("chat");
+        return;
+      }
+      setTicketId("");
+      setView("mode");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not cancel matchmaking.");
     }
   };
   const send = () => {
     const clean = message.trim();
     if (!clean) return;
-    setMessages(m => [...m, { mine:true, text:clean, time:"Now" }]);
-    setMessage("");
-    if (checkInId) {
-      void saveMoodlyData({ type:"message", email, checkInId, body:clean })
-        .catch(() => setToast("Your message could not be saved."));
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+      setToast("Reconnecting to the conversation. Please try again.");
+      return;
     }
+    socketRef.current.send(JSON.stringify({ type:"message", text:clean }));
+    setMessage("");
   };
   const submitSurvey = async () => {
     if (!survey.understood || !survey.change) return setToast("Please answer both questions.");
@@ -153,8 +295,22 @@ export default function MoodlyApp() {
       setToast(error instanceof Error ? error.message : "Could not save your response.");
     }
   };
-  const endChat = () => { setMenu(false); setView("survey"); };
+  const endChat = () => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type:"end" }));
+    }
+    setMenu(false);
+    setView("survey");
+  };
   const fmt = (s:number) => `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
+  const partnerInitials = partnerName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
+  const messageTime = (value:string) => {
+    if (value === "Now") return value;
+    const parsed = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+  };
 
   if (view === "welcome") return (
     <main className="welcome-shell">
@@ -227,16 +383,16 @@ export default function MoodlyApp() {
         <span className="overline">LOOKING FOR A CONNECTION</span><h2>Finding someone who fits…</h2>
         <p>We're searching for {mode === "similar" ? "someone in a similar emotional place":"a different, complementary headspace"}.</p>
         <div className="queue-card"><div><span>Your check-in</span><b>{emotion}</b></div><div><span>Looking for</span><b>{mode === "similar" ? "A similar feeling":"A different headspace"}</b></div></div>
-        <small className="wait">Waiting {fmt(queueSeconds)} · You can leave this screen open</small>
-        <button className="text-button cancel" onClick={() => setView("mode")}>Cancel search</button>
+        <small className="wait">Waiting {fmt(queueSeconds)} · Matching by mood and shared language</small>
+        <button className="text-button cancel" onClick={() => void cancelQueue()}>Cancel search</button>
       </section>}
       {view === "chat" && <section className="chat-view">
-        <header className="chat-header"><Brand/><div className="partner"><span className="avatar">GO</span><div><b>Gentle Otter</b><small><i/> Here with you</small></div></div><div className="chat-actions"><div className="timer">◷ {fmt(chatSeconds)}</div><button onClick={() => setMenu(!menu)}>•••</button>{menu && <div className="chat-menu"><button onClick={() => setReport(true)}>⚑ Report conversation</button><button onClick={() => { setToast("Gentle Otter has been blocked."); endChat(); }}>⊘ Block this person</button><button onClick={endChat}>↗ End conversation</button></div>}</div></header>
+        <header className="chat-header"><Brand/><div className="partner"><span className="avatar">{partnerInitials}</span><div><b>{partnerName}</b><small><i/> {onlineCount >= 2 ? "Here with you" : socketStatus === "live" ? "Connected" : "Reconnecting…"}</small></div></div><div className="chat-actions"><div className="timer">◷ {fmt(chatSeconds)}</div><button onClick={() => setMenu(!menu)}>•••</button>{menu && <div className="chat-menu"><button onClick={() => setReport(true)}>⚑ Report conversation</button><button onClick={() => { setToast(`${partnerName} has been blocked.`); endChat(); }}>⊘ Block this person</button><button onClick={endChat}>↗ End conversation</button></div>}</div></header>
         <div className="chat-note"><span>Your check-in</span><b>{emotion}</b>{note && <p>“{note}”</p>}</div>
-        <div className="messages"><div className="system-note">You're both anonymous. Be kind, stay curious, and share only what feels comfortable.</div>{messages.map((m,i) => <div key={i} className={`bubble-row ${m.mine?"mine":""}`}><div className="bubble">{m.text}<time>{m.time}</time></div></div>)}</div>
+        <div className="messages"><div className="system-note">You're both anonymous. Messages are delivered live and saved securely for this conversation.</div>{messages.map(m => <div key={m.id} className={`bubble-row ${m.mine?"mine":""}`}><div className="bubble">{m.text}<time>{messageTime(m.time)}</time></div></div>)}</div>
         <div className="composer"><button aria-label="Conversation guidance">＋</button><input value={message} onChange={e => setMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Say what's on your mind…"/><button className="send" onClick={send}>↑</button></div>
-        <footer className="chat-footer"><button onClick={() => openOverlay("resources")}>♡ Need help now?</button><span>Messages are private and temporary</span></footer>
-        {report && <Modal title={reportDone ? "Report received":"Report conversation"} onClose={() => { setReport(false); setReportDone(false); }}>{reportDone ? <><p>Thank you. The conversation has ended and our safety team will review your report.</p><button className="primary wide" onClick={() => { setReport(false); setView("survey"); }}>Continue</button></>:<><p className="modal-copy">What happened? Your report is private and reviewed by a person.</p><div className="report-list">{["Harassment or bullying","Sexual content","Hate or discrimination","Sharing personal information","Something else"].map(x => <button key={x} onClick={() => setReportDone(true)}>{x}<span>→</span></button>)}</div></>}</Modal>}
+        <footer className="chat-footer"><button onClick={() => openOverlay("resources")}>♡ Need help now?</button><span>{socketStatus === "live" ? "Live · Messages saved to this conversation" : "Reconnecting securely…"}</span></footer>
+        {report && <Modal title={reportDone ? "Report received":"Report conversation"} onClose={() => { setReport(false); setReportDone(false); }}>{reportDone ? <><p>Thank you. The conversation has ended and our safety team will review your report.</p><button className="primary wide" onClick={() => { setReport(false); endChat(); }}>Continue</button></>:<><p className="modal-copy">What happened? Your report is private and reviewed by a person.</p><div className="report-list">{["Harassment or bullying","Sexual content","Hate or discrimination","Sharing personal information","Something else"].map(x => <button key={x} onClick={() => setReportDone(true)}>{x}<span>→</span></button>)}</div></>}</Modal>}
       </section>}
       {view === "survey" && <section className="panel compact-panel survey-panel">
         <div className="survey-art">⌁</div><span className="overline">CONVERSATION COMPLETE</span><h2>How did that feel?</h2><p>Your answer helps us make future matches better.</p>

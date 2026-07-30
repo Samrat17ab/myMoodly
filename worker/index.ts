@@ -1,10 +1,10 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { ChatRoom, Matchmaker, type RealtimeEnv } from "./realtime";
 
-interface Env {
+interface Env extends RealtimeEnv {
   ASSETS: Fetcher;
-  DB: D1Database;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -29,6 +29,31 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    if (url.pathname === "/api/match") {
+      const payload = request.method === "POST"
+        ? await request.clone().json() as Record<string, unknown>
+        : {};
+      const email = authenticatedEmail(request, payload.email);
+      if (!email) return Response.json({ error: "Authentication required" }, { status: 401 });
+      const forwardedHeaders = new Headers(request.headers);
+      forwardedHeaders.set("x-moodly-user-email", email);
+      const matchmaker = env.MATCHMAKER.getByName("moodly-global-matchmaker");
+      return matchmaker.fetch(new Request(request, { headers: forwardedHeaders }));
+    }
+
+    if (url.pathname === "/api/realtime") {
+      const email = authenticatedEmail(request, url.searchParams.get("email"));
+      const conversationId = url.searchParams.get("conversationId");
+      if (!email || !conversationId) {
+        return new Response("Authentication required", { status: 401 });
+      }
+      const forwardedHeaders = new Headers(request.headers);
+      forwardedHeaders.set("x-moodly-user-email", email);
+      forwardedHeaders.set("x-moodly-conversation-id", conversationId);
+      const room = env.CHAT_ROOMS.getByName(conversationId);
+      return room.fetch(new Request(request, { headers: forwardedHeaders }));
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {
@@ -44,4 +69,19 @@ const worker = {
   },
 };
 
+function authenticatedEmail(request: Request, fallback: unknown) {
+  const platformEmail = request.headers
+    .get("oai-authenticated-user-email")
+    ?.trim()
+    .toLowerCase();
+  if (platformEmail) return platformEmail;
+
+  const hostname = new URL(request.url).hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return typeof fallback === "string" ? fallback.trim().toLowerCase() : "";
+  }
+  return "";
+}
+
+export { ChatRoom, Matchmaker };
 export default worker;

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const profiles = sqliteTable("profiles", {
   email: text("email").primaryKey(),
@@ -76,5 +76,89 @@ export const conversationSurveys = sqliteTable(
   },
   (table) => [
     index("conversation_surveys_check_in_idx").on(table.checkInId),
+  ],
+);
+
+export const matchmakingTickets = sqliteTable(
+  "matchmaking_tickets",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => profiles.email, { onDelete: "cascade" }),
+    checkInId: text("check_in_id")
+      .notNull()
+      .references(() => checkIns.id, { onDelete: "cascade" }),
+    matchMode: text("match_mode", {
+      enum: ["similar", "different"],
+    }).notNull(),
+    quadrant: text("quadrant", {
+      enum: ["red", "yellow", "green", "blue"],
+    }).notNull(),
+    languages: text("languages", { mode: "json" })
+      .$type<string[]>()
+      .notNull(),
+    status: text("status", {
+      enum: ["waiting", "matched", "cancelled", "expired"],
+    }).notNull(),
+    conversationId: text("conversation_id"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("matchmaking_tickets_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+    index("matchmaking_tickets_user_idx").on(table.userEmail),
+  ],
+);
+
+export const conversations = sqliteTable("conversations", {
+  id: text("id").primaryKey(),
+  status: text("status", { enum: ["active", "ended"] }).notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  endedAt: text("ended_at"),
+});
+
+export const conversationMembers = sqliteTable(
+  "conversation_members",
+  {
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userEmail: text("user_email")
+      .notNull()
+      .references(() => profiles.email, { onDelete: "cascade" }),
+    anonymousName: text("anonymous_name").notNull(),
+    joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.conversationId, table.userEmail] }),
+    uniqueIndex("conversation_members_user_conversation_idx").on(
+      table.userEmail,
+      table.conversationId,
+    ),
+  ],
+);
+
+export const conversationMessages = sqliteTable(
+  "conversation_messages",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderEmail: text("sender_email")
+      .notNull()
+      .references(() => profiles.email, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("conversation_messages_room_created_idx").on(
+      table.conversationId,
+      table.createdAt,
+    ),
   ],
 );

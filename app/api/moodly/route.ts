@@ -13,6 +13,19 @@ function cleanEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
+function requestEmail(request: Request, fallback: unknown) {
+  const platformEmail = cleanEmail(
+    request.headers.get("oai-authenticated-user-email"),
+  );
+  if (platformEmail) return platformEmail;
+
+  const hostname = new URL(request.url).hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return cleanEmail(fallback);
+  }
+  return "";
+}
+
 function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }
@@ -25,8 +38,11 @@ function errorResponse(error: unknown) {
 export async function GET(request: Request) {
   try {
     await ensureDbSchema();
-    const email = cleanEmail(new URL(request.url).searchParams.get("email"));
-    if (!email) return jsonError("email is required");
+    const email = requestEmail(
+      request,
+      new URL(request.url).searchParams.get("email"),
+    );
+    if (!email) return jsonError("Authentication required", 401);
 
     const d1 = getD1();
     const [profileResult, usageResult] = await d1.batch([
@@ -76,8 +92,8 @@ export async function POST(request: Request) {
     await ensureDbSchema();
     const payload = (await request.json()) as Record<string, unknown>;
     const type = payload.type;
-    const email = cleanEmail(payload.email);
-    if (!email) return jsonError("email is required");
+    const email = requestEmail(request, payload.email);
+    if (!email) return jsonError("Authentication required", 401);
 
     const d1 = getD1();
 

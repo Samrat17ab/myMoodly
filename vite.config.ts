@@ -31,6 +31,18 @@ const localBindingConfig = {
         },
       ]
     : [],
+  durable_objects: {
+    bindings: [
+      { name: "MATCHMAKER", class_name: "Matchmaker" },
+      { name: "CHAT_ROOMS", class_name: "ChatRoom" },
+    ],
+  },
+  migrations: [
+    {
+      tag: "v1",
+      new_sqlite_classes: ["Matchmaker", "ChatRoom"],
+    },
+  ],
 };
 
 export default defineConfig(async () => {
