@@ -7,6 +7,10 @@
   "workers_dev": true,
   "preview_urls": false,
   "no_bundle": true,
+  "vars": {
+    "SMTP_USERNAME": "lamsalsamrat831@gmail.com",
+    "PUBLIC_APP_URL": "https://moodly-realtime.lamsalsamrat831.workers.dev"
+  },
   "rules": [
     {
       "type": "ESModule",
@@ -16,7 +20,10 @@
   "assets": {
     "directory": "dist/client",
     "binding": "ASSETS",
-    "run_worker_first": true
+    "run_worker_first": [
+      "/api/*",
+      "/_vinext/image"
+    ]
   },
   "d1_databases": [
     {

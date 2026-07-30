@@ -14,10 +14,6 @@ type ProfilePayload = {
   terms?: boolean;
 };
 
-function cleanEmail(value: unknown) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
 function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }

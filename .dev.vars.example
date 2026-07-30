@@ -1,0 +1,4 @@
+SMTP_USERNAME=you@gmail.com
+GMAIL_APP_PASSWORD=store-a-fresh-app-password-here
+GOOGLE_CLIENT_ID=your-web-application-client-id
+GOOGLE_CLIENT_SECRET=your-web-application-client-secret

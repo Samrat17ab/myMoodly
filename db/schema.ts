@@ -162,3 +162,74 @@ export const conversationMessages = sqliteTable(
     ),
   ],
 );
+
+export const magicLinkTokens = sqliteTable(
+  "magic_link_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    email: text("email").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    requestedAt: integer("requested_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+    usedAt: integer("used_at"),
+  },
+  (table) => [
+    index("magic_link_tokens_email_requested_idx").on(
+      table.email,
+      table.requestedAt,
+    ),
+  ],
+);
+
+export const authSessions = sqliteTable(
+  "auth_sessions",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userEmail: text("user_email").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("auth_sessions_user_idx").on(table.userEmail),
+    index("auth_sessions_expires_idx").on(table.expiresAt),
+  ],
+);
+
+export const oauthStates = sqliteTable(
+  "oauth_states",
+  {
+    stateHash: text("state_hash").primaryKey(),
+    codeVerifier: text("code_verifier").notNull(),
+    nonce: text("nonce").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    index("oauth_states_expires_idx").on(table.expiresAt),
+  ],
+);
+
+export const oauthIdentities = sqliteTable(
+  "oauth_identities",
+  {
+    provider: text("provider").notNull(),
+    subject: text("subject").notNull(),
+    userEmail: text("user_email").notNull(),
+    emailAtLogin: text("email_at_login").notNull(),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+    updatedAt: integer("updated_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => [
+    primaryKey({ columns: [table.provider, table.subject] }),
+    index("oauth_identities_user_idx").on(table.userEmail),
+  ],
+);

@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react/no-unescaped-entities */
 
 import { useEffect, useRef, useState } from "react";
 
@@ -75,6 +76,7 @@ export default function MoodlyApp() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [email, setEmail] = useState("");
   const [magicSent, setMagicSent] = useState(false);
+  const [authSending, setAuthSending] = useState(false);
   const [chatSeconds, setChatSeconds] = useState(1200);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -97,6 +99,60 @@ export default function MoodlyApp() {
     const id = setTimeout(() => setToast(""), 2600);
     return () => clearTimeout(id);
   }, [toast]);
+  useEffect(() => {
+    let active = true;
+    const restoreSession = async () => {
+      const browserUrl = new URL(window.location.href);
+      const authError = browserUrl.searchParams.get("authError");
+      if (authError) {
+        browserUrl.searchParams.delete("authError");
+        window.history.replaceState({}, "", browserUrl);
+        if (active) {
+          setView("auth");
+          setToast(
+            authError === "google"
+              ? "Google sign-in could not be completed. Please try again."
+              : "That sign-in link is invalid or has expired.",
+          );
+        }
+        return;
+      }
+
+      try {
+        const sessionResponse = await fetch("/api/auth/session", {
+          cache: "no-store",
+        });
+        if (!sessionResponse.ok) return;
+        const session = await sessionResponse.json() as { email?: string };
+        const authenticatedEmail = session.email?.trim().toLowerCase() ?? "";
+        if (!authenticatedEmail) return;
+        const data = await readApiResponse(await fetch("/api/moodly", {
+          cache: "no-store",
+        }));
+        if (!active) return;
+        setEmail(authenticatedEmail);
+        if (data.profile) {
+          setProfile(data.profile as Profile);
+          setUsage(Number(data.usage ?? 0));
+          setView("home");
+        } else {
+          setView("onboarding");
+        }
+        if (browserUrl.searchParams.has("signedIn")) {
+          browserUrl.searchParams.delete("signedIn");
+          window.history.replaceState({}, "", browserUrl);
+        }
+      } catch (error) {
+        if (active) {
+          setToast(error instanceof Error ? error.message : "Could not restore your session.");
+        }
+      }
+    };
+    void restoreSession();
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     if (view !== "queue") return;
     const tick = setInterval(() => setQueueSeconds(s => s + 1), 1000);
@@ -148,7 +204,6 @@ export default function MoodlyApp() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const url = new URL(`${protocol}//${window.location.host}/api/realtime`);
       url.searchParams.set("conversationId", conversationId);
-      url.searchParams.set("email", email);
       const socket = new WebSocket(url);
       socketRef.current = socket;
 
@@ -187,26 +242,27 @@ export default function MoodlyApp() {
       socketRef.current?.close(1000, "Leaving conversation");
       socketRef.current = null;
     };
-  }, [view, conversationId, email]);
+  }, [view, conversationId]);
 
   const openOverlay = (v: View) => { setPrior(view); setView(v); setMenu(false); };
   const continueFromPleasant = (value:boolean) => { setPleasant(value); const next = energy === "high" ? (value ? "yellow":"red") : (value ? "green":"blue"); setQuadrant(next); setView("emotion"); };
   const chooseEmotion = (word:string) => { setEmotion(word); setView("context"); setTimeout(() => noteRef.current?.focus(), 80); };
-  const signIn = async (identity:string) => {
-    const normalized = identity.trim().toLowerCase();
-    if (!normalized) return;
-    setEmail(normalized);
+  const requestMagicLink = async () => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized || authSending) return;
+    setAuthSending(true);
     try {
-      const data = await readApiResponse(await fetch(`/api/moodly?email=${encodeURIComponent(normalized)}`));
-      if (data.profile) {
-        setProfile(data.profile as Profile);
-        setUsage(Number(data.usage ?? 0));
-        setView("home");
-      } else {
-        setView("onboarding");
-      }
+      await readApiResponse(await fetch("/api/auth/magic-link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+      }));
+      setEmail(normalized);
+      setMagicSent(true);
     } catch (error) {
-      setToast(error instanceof Error ? error.message : "Could not load your profile.");
+      setToast(error instanceof Error ? error.message : "Could not send the sign-in email.");
+    } finally {
+      setAuthSending(false);
     }
   };
   const saveProfile = async (nextView: View) => {
@@ -332,7 +388,7 @@ export default function MoodlyApp() {
     </main>
   );
 
-  if (view === "auth") return <Auth email={email} setEmail={setEmail} magicSent={magicSent} onMagic={() => setMagicSent(true)} onBack={() => setView("welcome")} onSuccess={signIn}/>;
+  if (view === "auth") return <Auth email={email} setEmail={setEmail} magicSent={magicSent} sending={authSending} onMagic={requestMagicLink} onReset={() => setMagicSent(false)} onBack={() => setView("welcome")}/>;
   if (view === "onboarding") return <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile("home")} toast={toast}/>;
 
   return (
@@ -416,7 +472,7 @@ function AppHeader({usage,onHome,onGuide,onHelp,onSettings}:{usage:number,onHome
 function Question({step,title,subtitle,onBack,children}:{step:number,title:string,subtitle:string,onBack:()=>void,children:React.ReactNode}){ return <section className="panel question-panel"><Progress step={step}/><button className="back" onClick={onBack}>←</button><div className="center-head"><span className="overline">CHECK IN WITH YOURSELF</span><h2>{title}</h2><p>{subtitle}</p></div>{children}<p className="reassure">There are no wrong answers here.</p></section>; }
 function Home({usage,onStart,onGuide}:{usage:number,onStart:()=>void,onGuide:()=>void}){ return <section className="home-view"><div className="home-copy"><span className="overline">A QUIET SPACE TO BE HONEST</span><h1>How are you,<br/><em>really?</em></h1><p>Take a breath. Name what you're feeling, then connect with someone who can meet you there.</p><button className="primary large" onClick={onStart}>Start a mood check-in <span>→</span></button><button className="watch" onClick={onGuide}>▷ How Moodly works</button></div><div className="home-visual"><div className="halo"/><div className="breath-card"><div className="breath-orb">⌁</div><span>Take a moment</span><b>There's space for<br/>whatever you feel.</b><small>Inhale · Exhale</small></div><div className="float-note fn1">“I felt heard.”</div><div className="float-note fn2">Anonymous & private</div></div><div className="today-card"><div><span>Today's connections</span><b>{usage} <small>/ 10 free</small></b></div><div className="usage-line"><i style={{width:`${usage*10}%`}}/></div><p>Your count resets at midnight UTC.</p></div></section>; }
 
-function Auth({email,setEmail,magicSent,onMagic,onBack,onSuccess}:{email:string,setEmail:(v:string)=>void,magicSent:boolean,onMagic:()=>void,onBack:()=>void,onSuccess:(identity:string)=>void}){ return <main className="auth-shell"><div className="auth-art"><button className="back light" onClick={onBack}>←</button><Brand/><div className="auth-quote">“Sometimes all you need is someone who gets it.”<small>A private space to talk, without the pressure.</small></div><div className="privacy-card">◌ Your identity stays yours</div></div><section className="auth-form"><div><span className="overline">WELCOME TO MOODLY</span><h1>{magicSent ? "Check your inbox":"A real conversation starts here."}</h1><p>{magicSent ? `We sent a secure sign-in link to ${email}.`:"Sign in to check in with yourself and connect anonymously."}</p>{magicSent ? <><div className="mail-illustration">✉</div><button className="primary wide" onClick={() => onSuccess(email)}>Open secure sign-in link</button><button className="text-button skip" onClick={() => onMagic()}>Resend email</button></>:<><button className="google" onClick={() => onSuccess("google-demo@moodly.local")}><b>G</b> Continue with Google</button><div className="or"><span/>or<span/></div><label>Email address<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/></label><button className="secondary wide" disabled={!email.includes("@")} onClick={onMagic}>Email me a sign-in link</button></>}<small className="terms-copy">By continuing, you agree to Moodly's Terms and acknowledge that Moodly is not a crisis service.</small></div></section></main>; }
+function Auth({email,setEmail,magicSent,sending,onMagic,onReset,onBack}:{email:string,setEmail:(v:string)=>void,magicSent:boolean,sending:boolean,onMagic:()=>Promise<void>,onReset:()=>void,onBack:()=>void}){ return <main className="auth-shell"><div className="auth-art"><button className="back light" onClick={onBack}>←</button><Brand/><div className="auth-quote">“Sometimes all you need is someone who gets it.”<small>A private space to talk, without the pressure.</small></div><div className="privacy-card">◌ Your identity stays yours</div></div><section className="auth-form"><div><span className="overline">WELCOME TO MOODLY</span><h1>{magicSent ? "Check your inbox":"A real conversation starts here."}</h1><p>{magicSent ? `We sent a secure, one-time sign-in link to ${email}. Open it on this device to continue.`:"Sign in to check in with yourself and connect anonymously."}</p>{magicSent ? <><div className="mail-illustration">✉</div><button className="text-button skip" disabled={sending} onClick={() => void onMagic()}>{sending ? "Sending…":"Resend email"}</button><button className="text-button skip" onClick={onReset}>Use a different email</button></>:<><button type="button" className="google" onClick={() => window.location.assign("/api/auth/google/start")}><b>G</b> Continue with Google</button><div className="or"><span/>or<span/></div><label>Email address<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={e => e.key === "Enter" && void onMagic()}/></label><button className="secondary wide" disabled={!email.includes("@") || sending} onClick={() => void onMagic()}>{sending ? "Sending secure link…":"Email me a sign-in link"}</button></>}<small className="terms-copy">By continuing, you agree to Moodly's Terms and acknowledge that Moodly is not a crisis service.</small></div></section></main>; }
 function Onboarding({profile,setProfile,onDone,toast}:{profile:Profile,setProfile:(p:Profile)=>void,onDone:()=>void,toast:string}){ const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]}); return <main className="onboard-shell"><header><Brand/><span>Private setup · About 1 minute</span></header><section className="onboard-card"><span className="overline">YOUR PRIVATE PROFILE</span><h1>Just enough to keep Moodly safe.</h1><p>This information is never shown to anyone you match with.</p><div className="form-grid"><label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label><label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>{profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}<label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset></div><label className="check"><input type="checkbox" checked={profile.terms} onChange={e=>setProfile({...profile,terms:e.target.checked})}/><span>I agree to the <u>Terms & Conditions</u>. I understand Moodly is 18+, anonymous but reportable, and not a crisis service.</span></label><button className="primary wide" onClick={onDone}>Complete setup <span>→</span></button></section>{toast&&<div className="toast">{toast}</div>}<button className="help-pill" onClick={()=>{}}>♡ Need help now?</button></main>; }
 function SurveyQuestion({label,options,value,onChange}:{label:string,options:string[],value:string,onChange:(v:string)=>void}){ return <div className="survey-q"><b>{label}</b><div>{options.map(o=><button className={value===o?"active":""} key={o} onClick={()=>onChange(o)}>{o}</button>)}</div></div>; }
 function Modal({title,onClose,children}:{title:string,onClose:()=>void,children:React.ReactNode}){ return <div className="modal-bg"><div className="modal"><button className="modal-close" onClick={onClose}>×</button><h2>{title}</h2>{children}</div></div>; }

@@ -118,6 +118,50 @@ export function ensureDbSchema() {
       d1.prepare(
         "CREATE INDEX IF NOT EXISTS conversation_messages_room_created_idx ON conversation_messages (conversation_id, created_at)",
       ),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS magic_link_tokens (
+        token_hash TEXT PRIMARY KEY NOT NULL,
+        email TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        requested_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        used_at INTEGER
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS magic_link_tokens_email_requested_idx ON magic_link_tokens (email, requested_at)",
+      ),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS auth_sessions (
+        token_hash TEXT PRIMARY KEY NOT NULL,
+        user_email TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions (user_email)",
+      ),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS auth_sessions_expires_idx ON auth_sessions (expires_at)",
+      ),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS oauth_states (
+        state_hash TEXT PRIMARY KEY NOT NULL,
+        code_verifier TEXT NOT NULL,
+        nonce TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS oauth_states_expires_idx ON oauth_states (expires_at)",
+      ),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS oauth_identities (
+        provider TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        user_email TEXT NOT NULL,
+        email_at_login TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (provider, subject)
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS oauth_identities_user_idx ON oauth_identities (user_email)",
+      ),
     ]);
   })().catch((error) => {
     schemaReady = null;
