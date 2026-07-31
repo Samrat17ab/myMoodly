@@ -375,7 +375,7 @@ export default function MoodlyApp() {
       <section className="hero">
         <div className="eyebrow"><span/> Private by design</div>
         <h1>Feel it. Share it.<br/><em>Let it move.</em></h1>
-        <p>Moodly connects you with someone who understands where you are — anonymously, right now.</p>
+        <p>Moodly is an 18+ peer-support app that helps adults name their mood and connect anonymously for a private, one-to-one conversation with someone in a similar or different headspace.</p>
         <button className="primary large" onClick={() => setView("auth")}>Check in with yourself <span>→</span></button>
         <div className="trust-row"><span>◌ No profiles</span><span>◌ No followers</span><span>◌ Just a real conversation</span></div>
       </section>
@@ -384,6 +384,31 @@ export default function MoodlyApp() {
         <div className="orbit-card oc2"><i>heavy</i><b>A little lost</b></div>
         <div className="orbit-card oc3"><i>bright</i><b>Genuinely excited</b></div>
       </div>
+      <section className="purpose-section" aria-labelledby="purpose-title">
+        <div className="purpose-heading">
+          <span className="overline">WHAT MOODLY DOES</span>
+          <h2 id="purpose-title">A private mood check-in, followed by a real human conversation.</h2>
+          <p>Moodly gives adults a structured way to identify how they feel, choose the kind of perspective they want, and be matched by mood and shared language for an anonymous conversation. Moodly is not therapy, medical care, or a crisis service.</p>
+        </div>
+        <div className="purpose-grid">
+          <article>
+            <span>01</span>
+            <h3>Check in</h3>
+            <p>Select your energy, mood, and emotion. You can add a short optional note for context.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Match anonymously</h3>
+            <p>Choose a similar or different headspace. Moodly matches by mood and language, without showing private profile details.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Why Google sign-in?</h3>
+            <p>Moodly uses your Google account identifier and verified email only to create and secure your account. It does not access Gmail, Drive, contacts, or calendar data.</p>
+          </article>
+        </div>
+        <p className="purpose-links"><a href="/privacy">Read our Privacy Policy</a><span>•</span><a href="#" onClick={(event) => { event.preventDefault(); setView("auth"); }}>Sign in to Moodly</a></p>
+      </section>
       <footer className="welcome-footer"><a href="/privacy">Privacy Policy</a></footer>
       <button className="help-pill" onClick={() => openOverlay("resources")}>♡ Need help now?</button>
     </main>
