@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | Moodly",
+  title: "Privacy Policy | myMoodly",
   description:
-    "How Moodly collects, uses, stores, and protects personal information.",
+    "How myMoodly collects, uses, stores, and protects personal information.",
 };
 
 const effectiveDate = "July 31, 2026";
@@ -13,12 +13,12 @@ export default function PrivacyPolicy() {
   return (
     <main className="legal-page">
       <header className="legal-header">
-        <Link className="brand legal-brand" href="/" aria-label="Moodly home">
+        <Link className="brand legal-brand" href="/" aria-label="myMoodly home">
           <span>m</span>
-          <b>Moodly</b>
+          <b>myMoodly</b>
         </Link>
         <Link className="legal-home-link" href="/">
-          Back to Moodly
+          Back to myMoodly
         </Link>
       </header>
 
@@ -28,9 +28,9 @@ export default function PrivacyPolicy() {
           <h1>Privacy Policy</h1>
           <p className="legal-effective">Effective and last updated: {effectiveDate}</p>
           <p>
-            Moodly is an 18+ mood check-in and anonymous conversation service
+            myMoodly is an 18+ mood check-in and anonymous conversation service
             operated by Samrat Lamsal in Nepal. This policy explains what
-            information Moodly collects, why it is used, when it is shared,
+            information myMoodly collects, why it is used, when it is shared,
             how long it is kept, and the choices available to you.
           </p>
         </div>
@@ -46,7 +46,7 @@ export default function PrivacyPolicy() {
             <li>
               <strong>Private profile information:</strong> age, gender choice
               (including an optional self-description), country, languages, and
-              acceptance of Moodly&apos;s terms.
+              acceptance of myMoodly&apos;s terms.
             </li>
             <li>
               <strong>Mood and conversation information:</strong> energy level,
@@ -61,19 +61,19 @@ export default function PrivacyPolicy() {
 
           <h3>Information received from Google</h3>
           <p>
-            If you choose Continue with Google, Moodly requests only the
+            If you choose Continue with Google, myMoodly requests only the
             <strong> openid</strong>, <strong>email</strong>, and
             <strong> profile</strong> permissions. Google provides a unique
             account identifier, your email address, and confirmation that the
-            email is verified. Moodly uses this information only to create,
-            connect, and secure your Moodly account. Moodly does not access your
+            email is verified. myMoodly uses this information only to create,
+            connect, and secure your myMoodly account. myMoodly does not access your
             Gmail messages, Google Drive files, contacts, calendar, password, or
             other Google content.
           </p>
 
           <h3>Information collected automatically</h3>
           <p>
-            Moodly and its hosting providers may process limited technical data,
+            myMoodly and its hosting providers may process limited technical data,
             such as IP address, browser and device information, request times,
             security events, and cookie data, to deliver the service, maintain
             sessions, prevent abuse, and diagnose failures.
@@ -85,7 +85,7 @@ export default function PrivacyPolicy() {
           <p>We use information to:</p>
           <ul>
             <li>authenticate users and maintain secure sessions;</li>
-            <li>confirm that users meet Moodly&apos;s 18+ requirement;</li>
+            <li>confirm that users meet myMoodly&apos;s 18+ requirement;</li>
             <li>provide mood check-ins and match users by mood and language;</li>
             <li>deliver anonymous conversations and show conversation history;</li>
             <li>operate safety, reporting, fraud-prevention, and abuse controls;</li>
@@ -94,7 +94,7 @@ export default function PrivacyPolicy() {
             <li>comply with applicable law and protect users and the service.</li>
           </ul>
           <p>
-            Moodly does not sell personal information, use Google user data for
+            myMoodly does not sell personal information, use Google user data for
             advertising, or use private conversation content to train
             advertising or general-purpose AI models.
           </p>
@@ -107,7 +107,7 @@ export default function PrivacyPolicy() {
             information shown within the conversation, such as your selected
             emotion, optional note, and messages. They do not receive your
             email address, age, gender, country, or Google account identifier
-            from Moodly. However, anything you voluntarily write in a note or
+            from myMoodly. However, anything you voluntarily write in a note or
             message may be seen and copied by the other participant. Do not
             share information you want to keep private.
           </p>
@@ -147,10 +147,10 @@ export default function PrivacyPolicy() {
         <section>
           <h2>5. Cookies and session security</h2>
           <p>
-            Moodly uses strictly necessary cookies to protect the Google OAuth
+            myMoodly uses strictly necessary cookies to protect the Google OAuth
             flow and keep you signed in. Authentication tokens and OAuth state
             values are stored in hashed or short-lived form where applicable.
-            These cookies are required for account access and security; Moodly
+            These cookies are required for account access and security; myMoodly
             does not currently use advertising cookies.
           </p>
         </section>
@@ -188,10 +188,10 @@ export default function PrivacyPolicy() {
           <p>
             Depending on where you live, you may have rights to access, correct,
             delete, restrict, or receive a copy of your personal information,
-            or to object to certain processing. You may also revoke Moodly&apos;s
+            or to object to certain processing. You may also revoke myMoodly&apos;s
             Google access from your Google Account permissions. Revoking Google
             access stops future Google sign-in but does not automatically delete
-            information already stored by Moodly.
+            information already stored by myMoodly.
           </p>
           <p>
             To exercise a privacy right or request account deletion, email{" "}
@@ -206,9 +206,9 @@ export default function PrivacyPolicy() {
         <section>
           <h2>9. Age restriction</h2>
           <p>
-            Moodly is intended only for people aged 18 or older. We do not
+            myMoodly is intended only for people aged 18 or older. We do not
             knowingly collect personal information from anyone under 18. If you
-            believe a person under 18 has provided information to Moodly,
+            believe a person under 18 has provided information to myMoodly,
             contact us so we can investigate and delete it where appropriate.
           </p>
         </section>
@@ -216,7 +216,7 @@ export default function PrivacyPolicy() {
         <section>
           <h2>10. International processing</h2>
           <p>
-            Moodly is operated from Nepal and uses service providers that may
+            myMoodly is operated from Nepal and uses service providers that may
             process information in other countries. Those countries may have
             privacy laws different from the laws where you live. We use
             reasonable safeguards appropriate to the nature of the information
@@ -227,9 +227,9 @@ export default function PrivacyPolicy() {
         <section>
           <h2>11. Health and crisis information</h2>
           <p>
-            Moodly is a peer conversation service, not a healthcare provider,
+            myMoodly is a peer conversation service, not a healthcare provider,
             medical service, therapy service, or crisis service. Information
-            entered into Moodly may reveal sensitive details about your mood or
+            entered into myMoodly may reveal sensitive details about your mood or
             wellbeing. If you are in immediate danger or may harm yourself or
             someone else, contact your local emergency service or an appropriate
             crisis resource.
@@ -239,7 +239,7 @@ export default function PrivacyPolicy() {
         <section>
           <h2>12. Changes to this policy</h2>
           <p>
-            We may update this policy as Moodly changes. The revised policy will
+            We may update this policy as myMoodly changes. The revised policy will
             be posted at this same URL with a new effective date. We will provide
             additional notice when required by law or when a change materially
             affects how personal information is used.
@@ -250,7 +250,7 @@ export default function PrivacyPolicy() {
           <h2>13. Contact</h2>
           <p>For privacy questions, requests, or complaints, contact:</p>
           <address>
-            <strong>Moodly / Samrat Lamsal</strong>
+            <strong>myMoodly / Samrat Lamsal</strong>
             <br />
             Nepal
             <br />
@@ -261,8 +261,8 @@ export default function PrivacyPolicy() {
         </section>
 
         <footer className="legal-footer">
-          <Link href="/">Return to Moodly</Link>
-          <span>© 2026 Moodly</span>
+          <Link href="/">Return to myMoodly</Link>
+          <span>© 2026 myMoodly</span>
         </footer>
       </article>
     </main>

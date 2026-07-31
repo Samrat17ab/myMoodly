@@ -5,19 +5,19 @@ import "./globals.css";
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Moodly - Feel it. Share it. Let it move.",
+  title: "myMoodly - Feel it. Share it. Let it move.",
   description:
     "Private, anonymous, mood-based conversations with someone who gets where you are.",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
   openGraph: {
-    title: "Moodly - Feel it. Share it. Let it move.",
+    title: "myMoodly - Feel it. Share it. Let it move.",
     description: "Anonymous conversations for how you really feel.",
     type: "website",
-    images: [{ url: "/og.png", width: 1734, height: 907, alt: "Moodly - anonymous conversations for how you really feel" }],
+    images: [{ url: "/og.png", width: 1734, height: 907, alt: "myMoodly - anonymous conversations for how you really feel" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Moodly - Feel it. Share it. Let it move.",
+    title: "myMoodly - Feel it. Share it. Let it move.",
     description: "Anonymous conversations for how you really feel.",
     images: ["/og.png"],
   },
