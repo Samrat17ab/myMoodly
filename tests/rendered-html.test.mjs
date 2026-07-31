@@ -65,3 +65,14 @@ test("keeps credentials out of tracked configuration", async () => {
   assert.match(example, /GMAIL_APP_PASSWORD=/);
   assert.match(ignore, /^\.dev\.vars$/m);
 });
+
+test("a new match search cannot reopen a previous conversation", async () => {
+  const realtime = await readFile(projectFile("worker/realtime.ts"), "utf8");
+  const existingTicketQuery = realtime.match(
+    /const existing = await this\.env\.DB[\s\S]*?\.first<TicketRow>\(\);/,
+  )?.[0];
+
+  assert.ok(existingTicketQuery, "The existing-ticket lookup should be present.");
+  assert.match(existingTicketQuery, /status = 'waiting'/);
+  assert.doesNotMatch(existingTicketQuery, /status = 'matched'/);
+});

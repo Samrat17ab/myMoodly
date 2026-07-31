@@ -153,15 +153,11 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
 
     const existing = await this.env.DB
       .prepare(
-        `SELECT mt.id, mt.status, mt.conversation_id
-         FROM matchmaking_tickets mt
-         LEFT JOIN conversations c ON c.id = mt.conversation_id
-         WHERE mt.user_email = ?
-           AND (
-             mt.status = 'waiting'
-             OR (mt.status = 'matched' AND c.status = 'active')
-           )
-         ORDER BY mt.created_at DESC LIMIT 1`,
+        `SELECT id, status, conversation_id
+         FROM matchmaking_tickets
+         WHERE user_email = ?
+           AND status = 'waiting'
+         ORDER BY created_at DESC LIMIT 1`,
       )
       .bind(email)
       .first<TicketRow>();

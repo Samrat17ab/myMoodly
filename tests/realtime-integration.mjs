@@ -107,6 +107,22 @@ assert.equal(senderPacket.message.mine, true);
 assert.equal(receiverPacket.message.text, "Hello from user A");
 assert.equal(receiverPacket.message.mine, false);
 
+const newSearch = await post("/api/match", {
+  action: "join",
+  email: users[0],
+  checkInId: checkIns[0].id,
+  matchMode: "similar",
+  quadrant: "green",
+  languages: ["English"],
+});
+assert.equal(
+  newSearch.status,
+  "waiting",
+  "A new search must not reopen an existing matched conversation.",
+);
+assert.notEqual(newSearch.ticketId, firstTicket.ticketId);
+assert.equal(newSearch.conversationId, undefined);
+
 const ended = sockets.map((socket) => waitForType(socket, "ended"));
 sockets[1].send(JSON.stringify({ type: "end" }));
 await Promise.all(ended);
