@@ -82,7 +82,16 @@ const secondTicket = await post("/api/match", {
   quadrant: "green",
   languages: ["English"],
 });
-assert.equal(secondTicket.status, "matched");
+assert.equal(secondTicket.status, "waiting");
+
+const earlyStatus = await post("/api/match", {
+  action: "status",
+  email: users[0],
+  ticketId: firstTicket.ticketId,
+});
+assert.equal(earlyStatus.status, "waiting");
+
+await new Promise((resolve) => setTimeout(resolve, 3_200));
 
 const firstStatus = await post("/api/match", {
   action: "status",
@@ -90,7 +99,17 @@ const firstStatus = await post("/api/match", {
   ticketId: firstTicket.ticketId,
 });
 assert.equal(firstStatus.status, "matched");
-assert.equal(firstStatus.conversationId, secondTicket.conversationId);
+assert.equal(firstStatus.partnerEmotion, "Calm");
+assert.equal(firstStatus.partnerNote, "Realtime integration test");
+
+const secondStatus = await post("/api/match", {
+  action: "status",
+  email: users[1],
+  ticketId: secondTicket.ticketId,
+});
+assert.equal(secondStatus.status, "matched");
+assert.equal(firstStatus.conversationId, secondStatus.conversationId);
+assert.equal(firstStatus.chatStartsAt, secondStatus.chatStartsAt);
 
 const websocketBase = baseUrl.replace(/^http/, "ws");
 const sockets = users.map((email) => new WebSocket(

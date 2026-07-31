@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable react/no-unescaped-entities */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Quadrant = "red" | "yellow" | "green" | "blue";
 type Profile = {
@@ -89,10 +89,31 @@ export default function MoodlyApp() {
   const [ticketId, setTicketId] = useState("");
   const [conversationId, setConversationId] = useState("");
   const [partnerName, setPartnerName] = useState("Anonymous partner");
+  const [partnerEmotion, setPartnerEmotion] = useState("");
+  const [partnerNote, setPartnerNote] = useState("");
   const [socketStatus, setSocketStatus] = useState<"connecting"|"live"|"offline">("offline");
   const [onlineCount, setOnlineCount] = useState(0);
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const matchTransitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleMatchedChat = useCallback((data: Record<string, unknown>) => {
+    if (!data.conversationId) return;
+    setConversationId(String(data.conversationId));
+    setPartnerName(String(data.partnerName ?? "Anonymous partner"));
+    setPartnerEmotion(String(data.partnerEmotion ?? ""));
+    setPartnerNote(String(data.partnerNote ?? ""));
+    const startsAt = Date.parse(String(data.chatStartsAt ?? ""));
+    const delay = Number.isNaN(startsAt) ? 0 : Math.max(0, startsAt - Date.now());
+    if (matchTransitionRef.current) clearTimeout(matchTransitionRef.current);
+    matchTransitionRef.current = setTimeout(() => {
+      setUsage(value => value + 1);
+      setChatSeconds(1200);
+      setMessages([]);
+      setView("chat");
+      matchTransitionRef.current = null;
+    }, delay);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -165,12 +186,7 @@ export default function MoodlyApp() {
         if (!active) return;
         if (data.status === "matched" && data.conversationId) {
           active = false;
-          setConversationId(String(data.conversationId));
-          setPartnerName(String(data.partnerName ?? "Anonymous partner"));
-          setUsage(value => value + 1);
-          setChatSeconds(1200);
-          setMessages([]);
-          setView("chat");
+          scheduleMatchedChat(data);
         } else if (data.status === "expired" || data.status === "cancelled") {
           active = false;
           setToast("No match was found this time. You can try again.");
@@ -186,8 +202,12 @@ export default function MoodlyApp() {
       active = false;
       clearInterval(tick);
       clearInterval(poll);
+      if (matchTransitionRef.current) {
+        clearTimeout(matchTransitionRef.current);
+        matchTransitionRef.current = null;
+      }
     };
-  }, [view, ticketId, email]);
+  }, [view, ticketId, email, scheduleMatchedChat]);
   useEffect(() => {
     if (view !== "chat") return;
     const tick = setInterval(() => setChatSeconds(s => Math.max(0, s - 1)), 1000);
@@ -294,15 +314,9 @@ export default function MoodlyApp() {
       });
       setTicketId(String(match.ticketId));
       setQueueSeconds(0);
+      setView("queue");
       if (match.status === "matched" && match.conversationId) {
-        setConversationId(String(match.conversationId));
-        setPartnerName(String(match.partnerName ?? "Anonymous partner"));
-        setUsage(value => value + 1);
-        setChatSeconds(1200);
-        setMessages([]);
-        setView("chat");
-      } else {
-        setView("queue");
+        scheduleMatchedChat(match);
       }
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not start matchmaking.");
@@ -314,12 +328,7 @@ export default function MoodlyApp() {
         ? await matchRequest({ action:"cancel", ticketId, email })
         : { status:"cancelled" };
       if (result.status === "matched" && result.conversationId) {
-        setConversationId(String(result.conversationId));
-        setPartnerName(String(result.partnerName ?? "Anonymous partner"));
-        setUsage(value => value + 1);
-        setChatSeconds(1200);
-        setMessages([]);
-        setView("chat");
+        scheduleMatchedChat(result);
         return;
       }
       setTicketId("");
@@ -470,7 +479,7 @@ export default function MoodlyApp() {
       </section>}
       {view === "chat" && <section className="chat-view">
         <header className="chat-header"><Brand/><div className="partner"><span className="avatar">{partnerInitials}</span><div><b>{partnerName}</b><small><i/> {onlineCount >= 2 ? "Here with you" : socketStatus === "live" ? "Connected" : "Reconnecting…"}</small></div></div><div className="chat-actions"><div className="timer">◷ {fmt(chatSeconds)}</div><button onClick={() => setMenu(!menu)}>•••</button>{menu && <div className="chat-menu"><button onClick={() => setReport(true)}>⚑ Report conversation</button><button onClick={() => { setToast(`${partnerName} has been blocked.`); endChat(); }}>⊘ Block this person</button><button onClick={endChat}>↗ End conversation</button></div>}</div></header>
-        <div className="chat-note"><span>Your check-in</span><b>{emotion}</b>{note && <p>“{note}”</p>}</div>
+        <div className="chat-note"><span>{partnerName}'s check-in</span><b>{partnerEmotion || "Shared privately"}</b>{partnerNote && <p>“{partnerNote}”</p>}</div>
         <div className="messages"><div className="system-note">You're both anonymous. Messages are delivered live and saved securely for this conversation.</div>{messages.map(m => <div key={m.id} className={`bubble-row ${m.mine?"mine":""}`}><div className="bubble">{m.text}<time>{messageTime(m.time)}</time></div></div>)}</div>
         <div className="composer"><button aria-label="Conversation guidance">＋</button><input value={message} onChange={e => setMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Say what's on your mind…"/><button className="send" onClick={send}>↑</button></div>
         <footer className="chat-footer"><button onClick={() => openOverlay("resources")}>♡ Need help now?</button><span>{socketStatus === "live" ? "Live · Messages saved to this conversation" : "Reconnecting securely…"}</span></footer>

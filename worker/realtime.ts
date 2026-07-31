@@ -19,9 +19,19 @@ type TicketRow = {
   conversation_id: string | null;
 };
 
+type WaitingTicketRow = {
+  id: string;
+  user_email: string;
+  match_mode: "similar" | "different";
+  quadrant: "red" | "yellow" | "green" | "blue";
+  languages: string;
+};
+
 const WAITING_TICKET_LIFETIME = "-2 minutes";
 const WAITING_HEARTBEAT_TIMEOUT = "-15 seconds";
 const CONVERSATION_LIFETIME = "-20 minutes";
+const MINIMUM_MATCH_WAIT_SECONDS = 3;
+const SYNCHRONIZED_CHAT_DELAY_SECONDS = 2;
 
 const adjectives = [
   "Gentle", "Quiet", "Kind", "Warm", "Brave", "Calm", "Bright", "Patient",
@@ -116,17 +126,41 @@ async function ticketResponse(d1: D1Database, ticket: TicketRow, email: string) 
 
   const partner = await d1
     .prepare(
-      `SELECT anonymous_name FROM conversation_members
-       WHERE conversation_id = ? AND user_email <> ? LIMIT 1`,
+      `SELECT
+         cm.anonymous_name,
+         ci.emotion,
+         ci.note,
+         strftime(
+           '%Y-%m-%dT%H:%M:%fZ',
+           c.created_at,
+           '+' || ? || ' seconds'
+         ) AS chat_starts_at
+       FROM conversation_members cm
+       JOIN conversations c ON c.id = cm.conversation_id
+       LEFT JOIN matchmaking_tickets mt
+         ON mt.conversation_id = cm.conversation_id
+        AND mt.user_email = cm.user_email
+       LEFT JOIN check_ins ci ON ci.id = mt.check_in_id
+       WHERE cm.conversation_id = ? AND cm.user_email <> ?
+       ORDER BY mt.created_at DESC
+       LIMIT 1`,
     )
-    .bind(ticket.conversation_id, email)
-    .first<{ anonymous_name: string }>();
+    .bind(SYNCHRONIZED_CHAT_DELAY_SECONDS, ticket.conversation_id, email)
+    .first<{
+      anonymous_name: string;
+      emotion: string | null;
+      note: string | null;
+      chat_starts_at: string;
+    }>();
 
   return {
     ticketId: ticket.id,
     status: ticket.status,
     conversationId: ticket.conversation_id,
     partnerName: partner?.anonymous_name ?? "Anonymous partner",
+    partnerEmotion: partner?.emotion ?? "",
+    partnerNote: partner?.note ?? "",
+    chatStartsAt: partner?.chat_starts_at ?? new Date().toISOString(),
   };
 }
 
@@ -190,14 +224,75 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
       return Response.json(await ticketResponse(this.env.DB, existing, email));
     }
 
+    const ticketId = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    await this.env.DB
+      .prepare(
+        `INSERT INTO matchmaking_tickets
+          (id, user_email, check_in_id, match_mode, quadrant, languages, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'waiting', ?, ?)`,
+      )
+      .bind(
+        ticketId,
+        email,
+        checkInId,
+        matchMode,
+        quadrant,
+        JSON.stringify(languages),
+        createdAt,
+        createdAt,
+      )
+      .run();
+    return Response.json({ ticketId, status: "waiting" }, { status: 201 });
+  }
+
+  private async status(email: string, payload: Record<string, unknown>) {
+    const ticketId = typeof payload.ticketId === "string" ? payload.ticketId : "";
+    await this.env.DB
+      .prepare(
+        `UPDATE matchmaking_tickets SET updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND user_email = ? AND status = 'waiting'`,
+      )
+      .bind(ticketId, email)
+      .run();
+    await this.tryMatch(email, ticketId);
+    const ticket = await this.env.DB
+      .prepare(
+        `SELECT id, status, conversation_id FROM matchmaking_tickets
+         WHERE id = ? AND user_email = ? LIMIT 1`,
+      )
+      .bind(ticketId, email)
+      .first<TicketRow>();
+    if (!ticket) {
+      return Response.json({ error: "Matchmaking ticket not found" }, { status: 404 });
+    }
+    return Response.json(await ticketResponse(this.env.DB, ticket, email));
+  }
+
+  private async tryMatch(email: string, ticketId: string) {
+    const current = await this.env.DB
+      .prepare(
+        `SELECT id, user_email, match_mode, quadrant, languages
+         FROM matchmaking_tickets
+         WHERE id = ?
+           AND user_email = ?
+           AND status = 'waiting'
+           AND julianday(created_at) <= julianday('now', '-' || ? || ' seconds')
+         LIMIT 1`,
+      )
+      .bind(ticketId, email, MINIMUM_MATCH_WAIT_SECONDS)
+      .first<WaitingTicketRow>();
+    if (!current) return;
+
     const candidate = await this.env.DB
       .prepare(
-        `SELECT mt.id, mt.user_email
+        `SELECT mt.id, mt.user_email, mt.match_mode, mt.quadrant, mt.languages
          FROM matchmaking_tickets mt
          WHERE mt.status = 'waiting'
            AND mt.user_email <> ?
            AND mt.created_at >= datetime('now', '-2 minutes')
            AND mt.updated_at >= datetime('now', '-15 seconds')
+           AND julianday(mt.created_at) <= julianday('now', '-' || ? || ' seconds')
            AND EXISTS (
              SELECT 1
              FROM json_each(mt.languages) candidate_language
@@ -217,110 +312,47 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
       )
       .bind(
         email,
-        JSON.stringify(languages),
-        matchMode,
-        quadrant,
-        matchMode,
-        quadrant,
-        quadrant,
-        quadrant,
+        MINIMUM_MATCH_WAIT_SECONDS,
+        current.languages,
+        current.match_mode,
+        current.quadrant,
+        current.match_mode,
+        current.quadrant,
+        current.quadrant,
+        current.quadrant,
       )
-      .first<{ id: string; user_email: string }>();
-
-    const ticketId = crypto.randomUUID();
-    if (!candidate) {
-      await this.env.DB
-        .prepare(
-          `INSERT INTO matchmaking_tickets
-            (id, user_email, check_in_id, match_mode, quadrant, languages, status)
-           VALUES (?, ?, ?, ?, ?, ?, 'waiting')`,
-        )
-        .bind(
-          ticketId,
-          email,
-          checkInId,
-          matchMode,
-          quadrant,
-          JSON.stringify(languages),
-        )
-        .run();
-      return Response.json({ ticketId, status: "waiting" }, { status: 201 });
-    }
+      .first<WaitingTicketRow>();
+    if (!candidate) return;
 
     const conversationId = crypto.randomUUID();
-    const currentName = anonymousName();
-    const candidateName = anonymousName();
+    const conversationCreatedAt = new Date().toISOString();
     await this.env.DB.batch([
       this.env.DB
-        .prepare("INSERT INTO conversations (id, status) VALUES (?, 'active')")
-        .bind(conversationId),
+        .prepare(
+          `INSERT INTO conversations (id, status, created_at)
+           VALUES (?, 'active', ?)`,
+        )
+        .bind(conversationId, conversationCreatedAt),
       this.env.DB
         .prepare(
           `INSERT INTO conversation_members
             (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
         )
-        .bind(conversationId, email, currentName),
+        .bind(conversationId, current.user_email, anonymousName()),
       this.env.DB
         .prepare(
           `INSERT INTO conversation_members
             (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
         )
-        .bind(conversationId, candidate.user_email, candidateName),
+        .bind(conversationId, candidate.user_email, anonymousName()),
       this.env.DB
         .prepare(
           `UPDATE matchmaking_tickets
            SET status = 'matched', conversation_id = ?, updated_at = CURRENT_TIMESTAMP
-           WHERE id = ? AND status = 'waiting'`,
+           WHERE id IN (?, ?) AND status = 'waiting'`,
         )
-        .bind(conversationId, candidate.id),
-      this.env.DB
-        .prepare(
-          `INSERT INTO matchmaking_tickets
-            (id, user_email, check_in_id, match_mode, quadrant, languages, status, conversation_id)
-           VALUES (?, ?, ?, ?, ?, ?, 'matched', ?)`,
-        )
-        .bind(
-          ticketId,
-          email,
-          checkInId,
-          matchMode,
-          quadrant,
-          JSON.stringify(languages),
-          conversationId,
-        ),
+        .bind(conversationId, current.id, candidate.id),
     ]);
-
-    return Response.json(
-      {
-        ticketId,
-        status: "matched",
-        conversationId,
-        partnerName: candidateName,
-      },
-      { status: 201 },
-    );
-  }
-
-  private async status(email: string, payload: Record<string, unknown>) {
-    const ticketId = typeof payload.ticketId === "string" ? payload.ticketId : "";
-    await this.env.DB
-      .prepare(
-        `UPDATE matchmaking_tickets SET updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND user_email = ? AND status = 'waiting'`,
-      )
-      .bind(ticketId, email)
-      .run();
-    const ticket = await this.env.DB
-      .prepare(
-        `SELECT id, status, conversation_id FROM matchmaking_tickets
-         WHERE id = ? AND user_email = ? LIMIT 1`,
-      )
-      .bind(ticketId, email)
-      .first<TicketRow>();
-    if (!ticket) {
-      return Response.json({ error: "Matchmaking ticket not found" }, { status: 404 });
-    }
-    return Response.json(await ticketResponse(this.env.DB, ticket, email));
   }
 
   private async cancel(email: string, payload: Record<string, unknown>) {
