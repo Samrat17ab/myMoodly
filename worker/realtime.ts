@@ -19,6 +19,10 @@ type TicketRow = {
   conversation_id: string | null;
 };
 
+const WAITING_TICKET_LIFETIME = "-2 minutes";
+const WAITING_HEARTBEAT_TIMEOUT = "-15 seconds";
+const CONVERSATION_LIFETIME = "-20 minutes";
+
 const adjectives = [
   "Gentle", "Quiet", "Kind", "Warm", "Brave", "Calm", "Bright", "Patient",
 ];
@@ -78,6 +82,33 @@ async function ensureRealtimeSchema(d1: D1Database) {
   ]);
 }
 
+async function expireStaleRealtimeState(d1: D1Database) {
+  await d1.batch([
+    d1.prepare(
+      `UPDATE matchmaking_tickets
+       SET status = 'expired', updated_at = CURRENT_TIMESTAMP
+       WHERE status = 'waiting'
+         AND (
+           created_at < datetime('now', ?)
+           OR updated_at < datetime('now', ?)
+         )`,
+    ).bind(WAITING_TICKET_LIFETIME, WAITING_HEARTBEAT_TIMEOUT),
+    d1.prepare(
+      `UPDATE conversations
+       SET status = 'ended', ended_at = CURRENT_TIMESTAMP
+       WHERE status = 'active' AND created_at < datetime('now', ?)`,
+    ).bind(CONVERSATION_LIFETIME),
+    d1.prepare(
+      `UPDATE matchmaking_tickets
+       SET status = 'expired', updated_at = CURRENT_TIMESTAMP
+       WHERE status = 'matched'
+         AND conversation_id IN (
+           SELECT id FROM conversations WHERE status <> 'active'
+         )`,
+    ),
+  ]);
+}
+
 async function ticketResponse(d1: D1Database, ticket: TicketRow, email: string) {
   if (ticket.status !== "matched" || !ticket.conversation_id) {
     return { ticketId: ticket.id, status: ticket.status };
@@ -106,6 +137,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
     }
 
     await ensureRealtimeSchema(this.env.DB);
+    await expireStaleRealtimeState(this.env.DB);
     const email = request.headers.get("x-moodly-user-email")?.trim().toLowerCase();
     if (!email) {
       return Response.json({ error: "Authentication required" }, { status: 401 });
@@ -144,13 +176,6 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
       return Response.json({ error: "Check-in not found" }, { status: 404 });
     }
 
-    await this.env.DB
-      .prepare(
-        `UPDATE matchmaking_tickets SET status = 'expired', updated_at = CURRENT_TIMESTAMP
-         WHERE status = 'waiting' AND created_at < datetime('now', '-2 minutes')`,
-      )
-      .run();
-
     const existing = await this.env.DB
       .prepare(
         `SELECT id, status, conversation_id
@@ -172,6 +197,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
          WHERE mt.status = 'waiting'
            AND mt.user_email <> ?
            AND mt.created_at >= datetime('now', '-2 minutes')
+           AND mt.updated_at >= datetime('now', '-15 seconds')
            AND EXISTS (
              SELECT 1
              FROM json_each(mt.languages) candidate_language
@@ -279,10 +305,8 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
     const ticketId = typeof payload.ticketId === "string" ? payload.ticketId : "";
     await this.env.DB
       .prepare(
-        `UPDATE matchmaking_tickets
-         SET status = 'expired', updated_at = CURRENT_TIMESTAMP
-         WHERE id = ? AND user_email = ? AND status = 'waiting'
-           AND created_at < datetime('now', '-2 minutes')`,
+        `UPDATE matchmaking_tickets SET updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND user_email = ? AND status = 'waiting'`,
       )
       .bind(ticketId, email)
       .run();
@@ -330,6 +354,7 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
     }
 
     await ensureRealtimeSchema(this.env.DB);
+    await expireStaleRealtimeState(this.env.DB);
     const email = request.headers.get("x-moodly-user-email")?.trim().toLowerCase();
     const conversationId = request.headers.get("x-moodly-conversation-id");
     if (!email || !conversationId) {
@@ -389,6 +414,7 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
   async webSocketMessage(socket: WebSocket, raw: string | ArrayBuffer) {
     const attachment = socket.deserializeAttachment() as ConnectionAttachment | null;
     if (!attachment || typeof raw !== "string") return;
+    await expireStaleRealtimeState(this.env.DB);
 
     let payload: Record<string, unknown>;
     try {
@@ -468,11 +494,15 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
   }
 
   private broadcastPresence() {
+    const onlineUsers = new Set<string>();
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
+      const attachment = socket.deserializeAttachment() as ConnectionAttachment | null;
+      if (attachment) onlineUsers.add(attachment.email);
+    }
     this.broadcast({
       type: "presence",
-      online: this.ctx.getWebSockets().filter(
-        (socket) => socket.readyState === WebSocket.OPEN,
-      ).length,
+      online: onlineUsers.size,
     });
   }
 }

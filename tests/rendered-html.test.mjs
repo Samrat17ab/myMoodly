@@ -76,3 +76,17 @@ test("a new match search cannot reopen a previous conversation", async () => {
   assert.match(existingTicketQuery, /status = 'waiting'/);
   assert.doesNotMatch(existingTicketQuery, /status = 'matched'/);
 });
+
+test("matching requires a live queue heartbeat and chats expire", async () => {
+  const realtime = await readFile(projectFile("worker/realtime.ts"), "utf8");
+
+  assert.match(realtime, /WAITING_HEARTBEAT_TIMEOUT = "-15 seconds"/);
+  assert.match(realtime, /mt\.updated_at >= datetime\('now', '-15 seconds'\)/);
+  assert.match(
+    realtime,
+    /UPDATE matchmaking_tickets SET updated_at = CURRENT_TIMESTAMP[\s\S]*status = 'waiting'/,
+  );
+  assert.match(realtime, /CONVERSATION_LIFETIME = "-20 minutes"/);
+  assert.match(realtime, /SET status = 'ended', ended_at = CURRENT_TIMESTAMP/);
+  assert.match(realtime, /onlineUsers\.add\(attachment\.email\)/);
+});
