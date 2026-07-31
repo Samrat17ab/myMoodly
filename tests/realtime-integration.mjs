@@ -6,6 +6,7 @@ const users = [
   `realtime-a-${runId}@moodly.local`,
   `realtime-b-${runId}@moodly.local`,
 ];
+const testLanguage = `Realtime language ${runId}`;
 
 async function post(path, payload) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -44,7 +45,7 @@ for (const email of users) {
       gender: "Prefer not to say",
       customGender: "",
       country: "Nepal",
-      languages: ["English"],
+      languages: [testLanguage],
       terms: true,
     },
   });
@@ -70,7 +71,7 @@ const firstTicket = await post("/api/match", {
   checkInId: checkIns[0].id,
   matchMode: "similar",
   quadrant: "green",
-  languages: ["English"],
+  languages: [testLanguage],
 });
 assert.equal(firstTicket.status, "waiting");
 
@@ -80,7 +81,7 @@ const secondTicket = await post("/api/match", {
   checkInId: checkIns[1].id,
   matchMode: "similar",
   quadrant: "green",
-  languages: ["English"],
+  languages: [testLanguage],
 });
 assert.equal(secondTicket.status, "waiting");
 
@@ -132,7 +133,7 @@ const newSearch = await post("/api/match", {
   checkInId: checkIns[0].id,
   matchMode: "similar",
   quadrant: "green",
-  languages: ["English"],
+  languages: [testLanguage],
 });
 assert.equal(
   newSearch.status,
