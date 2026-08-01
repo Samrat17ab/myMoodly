@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable react/no-unescaped-entities */
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Quadrant = "red" | "yellow" | "green" | "blue";
@@ -45,6 +46,32 @@ function initialsFor(email: string) {
   return (local.slice(0, 2) || "?").toUpperCase();
 }
 
+const VIEW_PATH: Record<View, string> = {
+  welcome: "/",
+  auth: "/signin",
+  onboarding: "/onboarding",
+  home: "/home",
+  energy: "/checkin/energy",
+  pleasantness: "/checkin/pleasantness",
+  emotion: "/checkin/emotion",
+  category: "/checkin/category",
+  context: "/checkin/note",
+  mode: "/checkin/mode",
+  queue: "/checkin/matching",
+  chat: "/chat",
+  survey: "/checkin/survey",
+  paywall: "/upgrade",
+  resources: "/help",
+  guide: "/guide",
+  settings: "/profile",
+};
+const PATH_VIEW = Object.fromEntries(
+  (Object.entries(VIEW_PATH) as [View, string][]).map(([v, p]) => [p, v]),
+) as Record<string, View>;
+// Views it's safe to land on directly from a URL (no in-memory wizard state required).
+const AUTHENTICATED_LANDING_VIEWS = new Set<View>(["home", "guide", "resources", "settings", "paywall"]);
+const PRE_AUTH_LANDING_VIEWS = new Set<View>(["auth", "guide", "resources"]);
+
 async function readApiResponse(response: Response) {
   const data = await response.json() as Record<string, unknown>;
   if (!response.ok) throw new Error(String(data.error ?? "myMoodly could not save your data."));
@@ -69,7 +96,6 @@ async function matchRequest(payload: Record<string, unknown>) {
 
 export default function MoodlyApp() {
   const [view, setView] = useState<View>("welcome");
-  const [, setViewStack] = useState<View[]>([]);
   const [energy, setEnergy] = useState<"high"|"low"|null>(null);
   const [pleasant, setPleasant] = useState<boolean|null>(null);
   const [quadrant, setQuadrant] = useState<Quadrant>("green");
@@ -103,6 +129,31 @@ export default function MoodlyApp() {
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const matchTransitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialPathRef = useRef(typeof window !== "undefined" ? window.location.pathname : "/");
+  const historyPushesRef = useRef(0);
+
+  const navigate = useCallback((next: View, opts?: { replace?: boolean }) => {
+    setView(next);
+    if (typeof window === "undefined") return;
+    const path = VIEW_PATH[next];
+    if (window.location.pathname === path) return;
+    const state = { view: next };
+    if (opts?.replace) {
+      window.history.replaceState(state, "", path);
+    } else {
+      window.history.pushState(state, "", path);
+      historyPushesRef.current += 1;
+    }
+  }, []);
+
+  useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as { view?: View } | null;
+      setView(state?.view ?? PATH_VIEW[window.location.pathname] ?? "home");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const scheduleMatchedChat = useCallback((data: Record<string, unknown>) => {
     if (!data.conversationId) return;
@@ -117,10 +168,10 @@ export default function MoodlyApp() {
       setUsage(value => value + 1);
       setChatSeconds(1200);
       setMessages([]);
-      setView("chat");
+      navigate("chat");
       matchTransitionRef.current = null;
     }, delay);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (!toast) return;
@@ -145,42 +196,41 @@ export default function MoodlyApp() {
       if (data.profile) {
         setProfile(data.profile as Profile);
         setUsage(Number(data.usage ?? 0));
-        setView("home");
+        const requested = PATH_VIEW[initialPathRef.current];
+        navigate(requested && AUTHENTICATED_LANDING_VIEWS.has(requested) ? requested : "home", { replace: true });
       } else {
-        setView("onboarding");
-      }
-      const browserUrl = new URL(window.location.href);
-      if (browserUrl.searchParams.has("signedIn")) {
-        browserUrl.searchParams.delete("signedIn");
-        window.history.replaceState({}, "", browserUrl);
+        navigate("onboarding", { replace: true });
       }
       return true;
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not restore your session.");
       return false;
     }
-  }, []);
+  }, [navigate]);
   useEffect(() => {
     let active = true;
     const restoreSession = async () => {
-      const browserUrl = new URL(window.location.href);
-      const authError = browserUrl.searchParams.get("authError");
+      const authError = new URL(window.location.href).searchParams.get("authError");
       if (authError) {
-        browserUrl.searchParams.delete("authError");
-        window.history.replaceState({}, "", browserUrl);
         if (active) {
-          setView("auth");
+          navigate("auth", { replace: true });
           setToast("Google sign-in could not be completed. Please try again.");
         }
         return;
       }
-      if (active) await completeSignIn();
+      if (!active) return;
+      const signedIn = await completeSignIn();
+      if (!active || signedIn) return;
+      const requested = PATH_VIEW[initialPathRef.current];
+      if (requested && PRE_AUTH_LANDING_VIEWS.has(requested)) {
+        navigate(requested, { replace: true });
+      }
     };
     void restoreSession();
     return () => {
       active = false;
     };
-  }, [completeSignIn]);
+  }, [completeSignIn, navigate]);
   useEffect(() => {
     if (view !== "queue") return;
     const tick = setInterval(() => setQueueSeconds(s => s + 1), 1000);
@@ -197,7 +247,7 @@ export default function MoodlyApp() {
         } else if (data.status === "expired" || data.status === "cancelled") {
           active = false;
           setToast("No match was found this time. You can try again.");
-          setView("mode");
+          navigate("mode");
         }
       } catch (error) {
         if (active) setToast(error instanceof Error ? error.message : "Could not check your match.");
@@ -214,7 +264,7 @@ export default function MoodlyApp() {
         matchTransitionRef.current = null;
       }
     };
-  }, [view, ticketId, email, scheduleMatchedChat]);
+  }, [view, ticketId, email, scheduleMatchedChat, navigate]);
   useEffect(() => {
     if (view !== "chat") return;
     const tick = setInterval(() => setChatSeconds(s => Math.max(0, s - 1)), 1000);
@@ -250,7 +300,7 @@ export default function MoodlyApp() {
           setOnlineCount(Number(payload.online ?? 0));
         } else if (payload.type === "ended") {
           setToast("The conversation has ended.");
-          setView("survey");
+          navigate("survey");
         } else if (payload.type === "error") {
           setToast(typeof payload.message === "string" ? payload.message : "Realtime chat error.");
         }
@@ -269,17 +319,19 @@ export default function MoodlyApp() {
       socketRef.current?.close(1000, "Leaving conversation");
       socketRef.current = null;
     };
-  }, [view, conversationId]);
+  }, [view, conversationId, navigate]);
 
-  const openOverlay = (v: View) => { setViewStack(s => [...s, view]); setView(v); setMenu(false); };
+  const openOverlay = (v: View) => { navigate(v); setMenu(false); };
   const goBack = useCallback(() => {
-    setViewStack(s => {
-      setView(s[s.length - 1] ?? "home");
-      return s.slice(0, -1);
-    });
-  }, []);
-  const continueFromPleasant = (value:boolean) => { setPleasant(value); const next = energy === "high" ? (value ? "yellow":"red") : (value ? "green":"blue"); setQuadrant(next); setView("emotion"); };
-  const chooseEmotion = (word:string) => { setEmotion(word); setView("context"); setTimeout(() => noteRef.current?.focus(), 80); };
+    if (historyPushesRef.current > 0) {
+      historyPushesRef.current -= 1;
+      window.history.back();
+    } else {
+      navigate(email ? "home" : "welcome");
+    }
+  }, [navigate, email]);
+  const continueFromPleasant = (value:boolean) => { setPleasant(value); const next = energy === "high" ? (value ? "yellow":"red") : (value ? "green":"blue"); setQuadrant(next); navigate("emotion"); };
+  const chooseEmotion = (word:string) => { setEmotion(word); navigate("context"); setTimeout(() => noteRef.current?.focus(), 80); };
   const requestCode = async () => {
     const normalized = email.trim().toLowerCase();
     if (!normalized || authSending) return;
@@ -345,8 +397,7 @@ export default function MoodlyApp() {
       setOtpSent(false);
       setProfile(emptyProfile);
       setUsage(0);
-      setViewStack([]);
-      setView("welcome");
+      navigate("welcome", { replace: true });
       setToast("You've been signed out.");
       setAccountBusy(false);
     }
@@ -361,8 +412,7 @@ export default function MoodlyApp() {
       setOtpSent(false);
       setProfile(emptyProfile);
       setUsage(0);
-      setViewStack([]);
-      setView("welcome");
+      navigate("welcome", { replace: true });
       setToast("Your account and data have been deleted.");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not delete your account.");
@@ -388,7 +438,7 @@ export default function MoodlyApp() {
       });
       setTicketId(String(match.ticketId));
       setQueueSeconds(0);
-      setView("queue");
+      navigate("queue");
       if (match.status === "matched" && match.conversationId) {
         scheduleMatchedChat(match);
       }
@@ -406,7 +456,7 @@ export default function MoodlyApp() {
         return;
       }
       setTicketId("");
-      setView("mode");
+      navigate("mode");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not cancel matchmaking.");
     }
@@ -429,7 +479,7 @@ export default function MoodlyApp() {
         understood:survey.understood, moodChange:survey.change,
       });
       setToast("Thanks — your response was saved.");
-      setView("home");
+      navigate("home");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not save your response.");
     }
@@ -439,7 +489,7 @@ export default function MoodlyApp() {
       socketRef.current.send(JSON.stringify({ type:"end" }));
     }
     setMenu(false);
-    setView("survey");
+    navigate("survey");
   };
   const fmt = (s:number) => `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
   const partnerInitials = partnerName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
@@ -454,12 +504,12 @@ export default function MoodlyApp() {
   if (view === "welcome") return (
     <main className="welcome-shell">
       <div className="aurora a1"/><div className="aurora a2"/>
-      <nav className="welcome-nav"><Brand/><button className="text-button" onClick={() => setView("auth")}>Sign in</button></nav>
+      <nav className="welcome-nav"><Brand/><button className="text-button" onClick={() => navigate("auth")}>Sign in</button></nav>
       <section className="hero">
         <div className="eyebrow"><span/> Private by design</div>
         <h1>Feel it. Share it.<br/><em>Let it move.</em></h1>
         <p>myMoodly is an 18+ peer-support app that helps adults name their mood and connect anonymously for a private, one-to-one conversation with someone in a similar or different headspace.</p>
-        <button className="primary large" onClick={() => setView("auth")}>Check in with yourself <span>→</span></button>
+        <button className="primary large" onClick={() => navigate("auth")}>Check in with yourself <span>→</span></button>
         <div className="trust-row"><span>◌ No profiles</span><span>◌ No followers</span><span>◌ Just a real conversation</span></div>
       </section>
       <div className="mood-orbit">
@@ -490,51 +540,51 @@ export default function MoodlyApp() {
             <p>myMoodly uses your Google account identifier and verified email only to create and secure your account. It does not access Gmail, Drive, contacts, or calendar data.</p>
           </article>
         </div>
-        <p className="purpose-links"><a href="/privacy">Read our Privacy Policy</a><span>•</span><a href="#" onClick={(event) => { event.preventDefault(); setView("auth"); }}>Sign in to myMoodly</a></p>
+        <p className="purpose-links"><Link href="/privacy">Read our Privacy Policy</Link><span>•</span><a href="#" onClick={(event) => { event.preventDefault(); navigate("auth"); }}>Sign in to myMoodly</a></p>
       </section>
-      <footer className="welcome-footer"><a href="/privacy">Privacy Policy</a></footer>
+      <footer className="welcome-footer"><Link href="/privacy">Privacy Policy</Link></footer>
       <button className="help-pill" onClick={() => openOverlay("resources")}>♡ Need help now?</button>
     </main>
   );
 
-  if (view === "auth") return <Auth email={email} setEmail={setEmail} otp={otp} setOtp={setOtp} otpSent={otpSent} sending={authSending} onRequestCode={requestCode} onVerifyCode={verifyCode} onReset={() => { setOtpSent(false); setOtp(""); }} onBack={() => setView("welcome")}/>;
-  if (view === "onboarding") return <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile(() => setView("home"))} toast={toast}/>;
+  if (view === "auth") return <Auth email={email} setEmail={setEmail} otp={otp} setOtp={setOtp} otpSent={otpSent} sending={authSending} onRequestCode={requestCode} onVerifyCode={verifyCode} onReset={() => { setOtpSent(false); setOtp(""); }} onBack={() => navigate("welcome")}/>;
+  if (view === "onboarding") return <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile(() => navigate("home", { replace: true }))} toast={toast}/>;
 
   return (
     <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
-      {view !== "chat" && <AppHeader usage={usage} email={email} onHome={() => setView("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
-      {view === "home" && <Home usage={usage} onStart={() => usage >= 10 ? setView("paywall") : setView("energy")} onGuide={() => openOverlay("guide")}/>}
-      {view === "energy" && <Question step={1} title="How's your energy right now?" subtitle="Don't overthink it — choose what feels closest." onBack={() => setView("home")}>
+      {view !== "chat" && <AppHeader usage={usage} email={email} onHome={() => navigate("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
+      {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "energy")} onGuide={() => openOverlay("guide")}/>}
+      {view === "energy" && <Question step={1} title="How's your energy right now?" subtitle="Don't overthink it — choose what feels closest." onBack={() => navigate("home")}>
         <div className="choice-grid">
-          <button className="energy-high" onClick={() => { setEnergy("high"); setView("pleasantness"); }}><span className="choice-art">↗</span><b>High energy</b><small>Activated, alert, buzzing</small></button>
-          <button className="energy-low" onClick={() => { setEnergy("low"); setView("pleasantness"); }}><span className="choice-art">〰</span><b>Low energy</b><small>Quiet, slow, still</small></button>
+          <button className="energy-high" onClick={() => { setEnergy("high"); navigate("pleasantness"); }}><span className="choice-art">↗</span><b>High energy</b><small>Activated, alert, buzzing</small></button>
+          <button className="energy-low" onClick={() => { setEnergy("low"); navigate("pleasantness"); }}><span className="choice-art">〰</span><b>Low energy</b><small>Quiet, slow, still</small></button>
         </div>
       </Question>}
-      {view === "pleasantness" && <Question step={2} title="How pleasant does it feel?" subtitle="There isn't a right answer — only yours." onBack={() => setView("energy")}>
+      {view === "pleasantness" && <Question step={2} title="How pleasant does it feel?" subtitle="There isn't a right answer — only yours." onBack={() => navigate("energy")}>
         <div className="choice-grid">
           <button className="pleasant" onClick={() => continueFromPleasant(true)}><span className="choice-art">⌣</span><b>Pleasant</b><small>Good, comfortable, welcome</small></button>
           <button className="unpleasant" onClick={() => continueFromPleasant(false)}><span className="choice-art">∿</span><b>Unpleasant</b><small>Difficult, uncomfortable, heavy</small></button>
         </div>
       </Question>}
       {view === "emotion" && <section className="panel emotion-panel">
-        <Progress step={3}/><button className="back" onClick={() => setView("pleasantness")}>←</button>
+        <Progress step={3}/><button className="back" onClick={() => navigate("pleasantness")}>←</button>
         <div className="center-head"><span className="overline">ONE LAST DETAIL</span><h2>Which word feels closest?</h2><p>Pick the one that best names this moment.</p></div>
         <div className="emotion-grid">{words[quadrant].map(w => <button key={w} onClick={() => chooseEmotion(w)}>{w}</button>)}</div>
-        <button className="other" onClick={() => setView("category")}>None of these fit <span>→</span></button>
+        <button className="other" onClick={() => navigate("category")}>None of these fit <span>→</span></button>
       </section>}
-      {view === "category" && <Question step={3} title="Let's try another direction" subtitle="Choose the broad feeling that feels nearest." onBack={() => setView("emotion")}>
-        <div className="category-grid">{(["red","blue","yellow","green"] as Quadrant[]).map(c => <button key={c} onClick={() => { setQuadrant(c); setView("emotion"); }}><span className={`dot ${c}`}/><b>{categoryLabel[c]}</b><small>{c === "red" ? "High & unpleasant":c === "blue" ? "Low & unpleasant":c === "yellow" ? "High & pleasant":"Low & pleasant"}</small></button>)}</div>
+      {view === "category" && <Question step={3} title="Let's try another direction" subtitle="Choose the broad feeling that feels nearest." onBack={() => navigate("emotion")}>
+        <div className="category-grid">{(["red","blue","yellow","green"] as Quadrant[]).map(c => <button key={c} onClick={() => { setQuadrant(c); navigate("emotion"); }}><span className={`dot ${c}`}/><b>{categoryLabel[c]}</b><small>{c === "red" ? "High & unpleasant":c === "blue" ? "Low & unpleasant":c === "yellow" ? "High & pleasant":"Low & pleasant"}</small></button>)}</div>
       </Question>}
       {view === "context" && <section className="panel compact-panel">
-        <Progress step={4}/><button className="back" onClick={() => setView("emotion")}>←</button>
+        <Progress step={4}/><button className="back" onClick={() => navigate("emotion")}>←</button>
         <div className="feeling-chip">You're feeling <b>{emotion}</b></div>
         <div className="center-head"><h2>Want to add a little context?</h2><p>Optional — just enough to help the conversation begin.</p></div>
         <div className="note-box"><textarea ref={noteRef} maxLength={80} value={note} onChange={e => setNote(e.target.value)} placeholder="A few words about what's going on…"/><span>{note.length}/80</span></div>
         <p className="privacy-note">⌁ Contact details are automatically removed to protect your privacy.</p>
-        <button className="primary wide" onClick={() => setView("mode")}>{note ? "Continue":"Skip for now"} <span>→</span></button>
+        <button className="primary wide" onClick={() => navigate("mode")}>{note ? "Continue":"Skip for now"} <span>→</span></button>
       </section>}
       {view === "mode" && <section className="panel compact-panel">
-        <Progress step={5}/><button className="back" onClick={() => setView("context")}>←</button>
+        <Progress step={5}/><button className="back" onClick={() => navigate("context")}>←</button>
         <div className="center-head"><span className="overline">YOUR INTENTION</span><h2>Who would feel right to talk to?</h2><p>You can choose differently every time you check in.</p></div>
         <div className="mode-stack">
           <button className={mode === "similar" ? "selected":""} onClick={() => setMode("similar")}><span className="mode-icon">≈</span><span><b>Someone who feels similar</b><small>Be met by someone in a close emotional place</small></span><i>✓</i></button>
@@ -564,9 +614,9 @@ export default function MoodlyApp() {
         <SurveyQuestion label="Did you feel understood in this conversation?" options={["Yes","Somewhat","No"]} value={survey.understood} onChange={v => setSurvey({...survey,understood:v})}/>
         <SurveyQuestion label="How do you feel compared to before?" options={["Better","Same","Worse"]} value={survey.change} onChange={v => setSurvey({...survey,change:v})}/>
         <button className="primary wide" onClick={() => void submitSurvey()}>Submit response</button>
-        <button className="text-button skip" onClick={() => setView("home")}>Skip for now</button>
+        <button className="text-button skip" onClick={() => navigate("home")}>Skip for now</button>
       </section>}
-      {view === "paywall" && <Paywall onBack={() => setView("home")} onUpgrade={() => setToast("Secure subscription checkout is ready for your payment provider.")}/>}
+      {view === "paywall" && <Paywall onBack={() => navigate("home")} onUpgrade={() => setToast("Secure subscription checkout is ready for your payment provider.")}/>}
       {view === "resources" && <Resources country={profile.country} onBack={goBack}/>}
       {view === "guide" && <Guide onBack={goBack}/>}
       {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} usage={usage} busy={accountBusy} onBack={goBack} onSave={() => void saveProfile(goBack)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()}/>}
@@ -581,8 +631,8 @@ function AppHeader({usage,email,onHome,onGuide,onHelp,onSettings}:{usage:number,
 function Question({step,title,subtitle,onBack,children}:{step:number,title:string,subtitle:string,onBack:()=>void,children:React.ReactNode}){ return <section className="panel question-panel"><Progress step={step}/><button className="back" onClick={onBack}>←</button><div className="center-head"><span className="overline">CHECK IN WITH YOURSELF</span><h2>{title}</h2><p>{subtitle}</p></div>{children}<p className="reassure">There are no wrong answers here.</p></section>; }
 function Home({usage,onStart,onGuide}:{usage:number,onStart:()=>void,onGuide:()=>void}){ return <section className="home-view"><div className="home-copy"><span className="overline">A QUIET SPACE TO BE HONEST</span><h1>How are you,<br/><em>really?</em></h1><p>Take a breath. Name what you're feeling, then connect with someone who can meet you there.</p><button className="primary large" onClick={onStart}>Start a mood check-in <span>→</span></button><button className="watch" onClick={onGuide}>▷ How myMoodly works</button></div><div className="home-visual"><div className="halo"/><div className="breath-card"><div className="breath-orb">⌁</div><span>Take a moment</span><b>There's space for<br/>whatever you feel.</b><small>Inhale · Exhale</small></div><div className="float-note fn1">“I felt heard.”</div><div className="float-note fn2">Anonymous & private</div></div><div className="today-card"><div><span>Today's connections</span><b>{usage} <small>/ 10 free</small></b></div><div className="usage-line"><i style={{width:`${usage*10}%`}}/></div><p>Your count resets at midnight UTC.</p></div></section>; }
 
-function Auth({email,setEmail,otp,setOtp,otpSent,sending,onRequestCode,onVerifyCode,onReset,onBack}:{email:string,setEmail:(v:string)=>void,otp:string,setOtp:(v:string)=>void,otpSent:boolean,sending:boolean,onRequestCode:()=>Promise<void>,onVerifyCode:()=>Promise<void>,onReset:()=>void,onBack:()=>void}){ return <main className="auth-shell"><div className="auth-art"><button className="back light" onClick={onBack}>←</button><Brand/><div className="auth-quote">“Sometimes all you need is someone who gets it.”<small>A private space to talk, without the pressure.</small></div><div className="privacy-card">◌ Your identity stays yours</div></div><section className="auth-form"><div><span className="overline">WELCOME TO MYMOODLY</span><h1>{otpSent ? "Enter your code":"A real conversation starts here."}</h1><p>{otpSent ? `We sent a 6-digit code to ${email}. Enter it below to continue.`:"Sign in to check in with yourself and connect anonymously."}</p>{otpSent ? <><label>Verification code<input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g,"").slice(0,6))} placeholder="123456" onKeyDown={e => e.key === "Enter" && void onVerifyCode()}/></label><button className="secondary wide" disabled={otp.length !== 6 || sending} onClick={() => void onVerifyCode()}>{sending ? "Verifying…":"Verify & continue"}</button><button className="text-button skip" disabled={sending} onClick={() => void onRequestCode()}>{sending ? "Sending…":"Resend code"}</button><button className="text-button skip" onClick={onReset}>Use a different email</button></>:<><button type="button" className="google" onClick={() => window.location.assign("/api/auth/google/start")}><b>G</b> Continue with Google</button><div className="or"><span/>or<span/></div><label>Email address<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={e => e.key === "Enter" && void onRequestCode()}/></label><button className="secondary wide" disabled={!email.includes("@") || sending} onClick={() => void onRequestCode()}>{sending ? "Sending code…":"Email me a sign-in code"}</button></>}<small className="terms-copy">By continuing, you agree to myMoodly's Terms, acknowledge our <a href="/privacy">Privacy Policy</a>, and understand that myMoodly is not a crisis service.</small></div></section></main>; }
-function Onboarding({profile,setProfile,onDone,toast}:{profile:Profile,setProfile:(p:Profile)=>void,onDone:()=>void,toast:string}){ const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]}); return <main className="onboard-shell"><header><Brand/><span>Private setup · About 1 minute</span></header><section className="onboard-card"><span className="overline">YOUR PRIVATE PROFILE</span><h1>Just enough to keep myMoodly safe.</h1><p>This information is never shown to anyone you match with.</p><div className="form-grid"><label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label><label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>{profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}<label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset></div><label className="check"><input type="checkbox" checked={profile.terms} onChange={e=>setProfile({...profile,terms:e.target.checked})}/><span>I agree to the <u>Terms & Conditions</u> and acknowledge the <a href="/privacy">Privacy Policy</a>. I understand myMoodly is 18+, anonymous but reportable, and not a crisis service.</span></label><button className="primary wide" onClick={onDone}>Complete setup <span>→</span></button></section>{toast&&<div className="toast">{toast}</div>}<button className="help-pill" onClick={()=>{}}>♡ Need help now?</button></main>; }
+function Auth({email,setEmail,otp,setOtp,otpSent,sending,onRequestCode,onVerifyCode,onReset,onBack}:{email:string,setEmail:(v:string)=>void,otp:string,setOtp:(v:string)=>void,otpSent:boolean,sending:boolean,onRequestCode:()=>Promise<void>,onVerifyCode:()=>Promise<void>,onReset:()=>void,onBack:()=>void}){ return <main className="auth-shell"><div className="auth-art"><button className="back light" onClick={onBack}>←</button><Brand/><div className="auth-quote">“Sometimes all you need is someone who gets it.”<small>A private space to talk, without the pressure.</small></div><div className="privacy-card">◌ Your identity stays yours</div></div><section className="auth-form"><div><span className="overline">WELCOME TO MYMOODLY</span><h1>{otpSent ? "Enter your code":"A real conversation starts here."}</h1><p>{otpSent ? `We sent a 6-digit code to ${email}. Enter it below to continue.`:"Sign in to check in with yourself and connect anonymously."}</p>{otpSent ? <><label>Verification code<input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g,"").slice(0,6))} placeholder="123456" onKeyDown={e => e.key === "Enter" && void onVerifyCode()}/></label><button className="secondary wide" disabled={otp.length !== 6 || sending} onClick={() => void onVerifyCode()}>{sending ? "Verifying…":"Verify & continue"}</button><button className="text-button skip" disabled={sending} onClick={() => void onRequestCode()}>{sending ? "Sending…":"Resend code"}</button><button className="text-button skip" onClick={onReset}>Use a different email</button></>:<><button type="button" className="google" onClick={() => window.location.assign("/api/auth/google/start")}><b>G</b> Continue with Google</button><div className="or"><span/>or<span/></div><label>Email address<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" onKeyDown={e => e.key === "Enter" && void onRequestCode()}/></label><button className="secondary wide" disabled={!email.includes("@") || sending} onClick={() => void onRequestCode()}>{sending ? "Sending code…":"Email me a sign-in code"}</button></>}<small className="terms-copy">By continuing, you agree to myMoodly's Terms, acknowledge our <Link href="/privacy">Privacy Policy</Link>, and understand that myMoodly is not a crisis service.</small></div></section></main>; }
+function Onboarding({profile,setProfile,onDone,toast}:{profile:Profile,setProfile:(p:Profile)=>void,onDone:()=>void,toast:string}){ const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]}); return <main className="onboard-shell"><header><Brand/><span>Private setup · About 1 minute</span></header><section className="onboard-card"><span className="overline">YOUR PRIVATE PROFILE</span><h1>Just enough to keep myMoodly safe.</h1><p>This information is never shown to anyone you match with.</p><div className="form-grid"><label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label><label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>{profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}<label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset></div><label className="check"><input type="checkbox" checked={profile.terms} onChange={e=>setProfile({...profile,terms:e.target.checked})}/><span>I agree to the <u>Terms & Conditions</u> and acknowledge the <Link href="/privacy">Privacy Policy</Link>. I understand myMoodly is 18+, anonymous but reportable, and not a crisis service.</span></label><button className="primary wide" onClick={onDone}>Complete setup <span>→</span></button></section>{toast&&<div className="toast">{toast}</div>}<button className="help-pill" onClick={()=>{}}>♡ Need help now?</button></main>; }
 function SurveyQuestion({label,options,value,onChange}:{label:string,options:string[],value:string,onChange:(v:string)=>void}){ return <div className="survey-q"><b>{label}</b><div>{options.map(o=><button className={value===o?"active":""} key={o} onClick={()=>onChange(o)}>{o}</button>)}</div></div>; }
 function Modal({title,onClose,children}:{title:string,onClose:()=>void,children:React.ReactNode}){ return <div className="modal-bg"><div className="modal"><button className="modal-close" onClick={onClose}>×</button><h2>{title}</h2>{children}</div></div>; }
 function Resources({country,onBack}:{country:string,onBack:()=>void}){ return <section className="resource-view"><button className="back" onClick={onBack}>←</button><div className="resource-head"><span>♡</span><div><small>IMMEDIATE SUPPORT</small><h1>Need help right now?</h1><p>myMoodly isn't a crisis service, but you don't have to face this moment alone.</p></div></div><div className="resource-layout"><div><h3>Emergency contacts for {country}</h3>{country==="Nepal"?<><ResourceCard title="National Suicide Prevention Helpline" number="1166" note="Free, nationwide support"/><ResourceCard title="Police emergency" number="100" note="For immediate danger"/><ResourceCard title="Ambulance" number="102" note="Emergency medical support"/></>:<><ResourceCard title="Local emergency services" number="112 / 911" note="Use the number available in your country"/><ResourceCard title="Find a crisis centre" number="findahelpline.com" note="Verified helplines in 175+ countries"/></>}<p className="resource-foot">If a number doesn't connect, call your local emergency service or go to the nearest emergency department.</p></div><aside><h3>While you reach out</h3><p>Move to a place where other people are nearby.</p><p>Put distance between you and anything you could use to hurt yourself.</p><p>Text or call someone you trust and say: “I need you with me right now.”</p></aside></div></section>; }
