@@ -69,7 +69,7 @@ async function matchRequest(payload: Record<string, unknown>) {
 
 export default function MoodlyApp() {
   const [view, setView] = useState<View>("welcome");
-  const [prior, setPrior] = useState<View>("home");
+  const [, setViewStack] = useState<View[]>([]);
   const [energy, setEnergy] = useState<"high"|"low"|null>(null);
   const [pleasant, setPleasant] = useState<boolean|null>(null);
   const [quadrant, setQuadrant] = useState<Quadrant>("green");
@@ -271,7 +271,13 @@ export default function MoodlyApp() {
     };
   }, [view, conversationId]);
 
-  const openOverlay = (v: View) => { setPrior(view); setView(v); setMenu(false); };
+  const openOverlay = (v: View) => { setViewStack(s => [...s, view]); setView(v); setMenu(false); };
+  const goBack = useCallback(() => {
+    setViewStack(s => {
+      setView(s[s.length - 1] ?? "home");
+      return s.slice(0, -1);
+    });
+  }, []);
   const continueFromPleasant = (value:boolean) => { setPleasant(value); const next = energy === "high" ? (value ? "yellow":"red") : (value ? "green":"blue"); setQuadrant(next); setView("emotion"); };
   const chooseEmotion = (word:string) => { setEmotion(word); setView("context"); setTimeout(() => noteRef.current?.focus(), 80); };
   const requestCode = async () => {
@@ -315,13 +321,13 @@ export default function MoodlyApp() {
       setAuthSending(false);
     }
   };
-  const saveProfile = async (nextView: View) => {
+  const saveProfile = async (afterSave: () => void) => {
     if (+profile.age < 18) return setToast("myMoodly is only available to people aged 18 or older.");
     if (!profile.gender || !profile.terms) return setToast("Please complete the required fields.");
     try {
       await saveMoodlyData({ type:"profile", email, profile });
       setToast("Your private profile was saved.");
-      setView(nextView);
+      afterSave();
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not save your profile.");
     }
@@ -339,6 +345,7 @@ export default function MoodlyApp() {
       setOtpSent(false);
       setProfile(emptyProfile);
       setUsage(0);
+      setViewStack([]);
       setView("welcome");
       setToast("You've been signed out.");
       setAccountBusy(false);
@@ -354,6 +361,7 @@ export default function MoodlyApp() {
       setOtpSent(false);
       setProfile(emptyProfile);
       setUsage(0);
+      setViewStack([]);
       setView("welcome");
       setToast("Your account and data have been deleted.");
     } catch (error) {
@@ -490,7 +498,7 @@ export default function MoodlyApp() {
   );
 
   if (view === "auth") return <Auth email={email} setEmail={setEmail} otp={otp} setOtp={setOtp} otpSent={otpSent} sending={authSending} onRequestCode={requestCode} onVerifyCode={verifyCode} onReset={() => { setOtpSent(false); setOtp(""); }} onBack={() => setView("welcome")}/>;
-  if (view === "onboarding") return <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile("home")} toast={toast}/>;
+  if (view === "onboarding") return <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile(() => setView("home"))} toast={toast}/>;
 
   return (
     <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
@@ -559,9 +567,9 @@ export default function MoodlyApp() {
         <button className="text-button skip" onClick={() => setView("home")}>Skip for now</button>
       </section>}
       {view === "paywall" && <Paywall onBack={() => setView("home")} onUpgrade={() => setToast("Secure subscription checkout is ready for your payment provider.")}/>}
-      {view === "resources" && <Resources country={profile.country} onBack={() => setView(prior)}/>}
-      {view === "guide" && <Guide onBack={() => setView(prior)}/>}
-      {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} usage={usage} busy={accountBusy} onBack={() => setView(prior)} onSave={() => void saveProfile(prior)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()}/>}
+      {view === "resources" && <Resources country={profile.country} onBack={goBack}/>}
+      {view === "guide" && <Guide onBack={goBack}/>}
+      {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} usage={usage} busy={accountBusy} onBack={goBack} onSave={() => void saveProfile(goBack)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()}/>}
       {toast && <div className="toast">{toast}</div>}
     </main>
   );
