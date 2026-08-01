@@ -72,6 +72,10 @@ export const conversationSurveys = sqliteTable(
       .references(() => profiles.email, { onDelete: "cascade" }),
     understood: text("understood").notNull(),
     moodChange: text("mood_change").notNull(),
+    moodQuadrant: text("mood_quadrant"),
+    moodEmotion: text("mood_emotion"),
+    matchedMoodQuadrant: text("matched_mood_quadrant"),
+    matchedMoodEmotion: text("matched_mood_emotion"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [

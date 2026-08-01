@@ -24,6 +24,66 @@ export function getD1() {
 
 let schemaReady: Promise<void> | null = null;
 
+// conversation_surveys predates these columns, so existing deployments need
+// them added and backfilled rather than just created fresh.
+async function ensureConversationSurveyMoodColumns(d1: D1Database) {
+  const columns = await d1
+    .prepare("PRAGMA table_info(conversation_surveys)")
+    .all<{ name: string }>();
+  const existing = new Set(columns.results.map((column) => column.name));
+  const missing = (
+    [
+      ["mood_quadrant", "TEXT"],
+      ["mood_emotion", "TEXT"],
+      ["matched_mood_quadrant", "TEXT"],
+      ["matched_mood_emotion", "TEXT"],
+    ] as const
+  ).filter(([name]) => !existing.has(name));
+
+  if (missing.length > 0) {
+    await d1.batch(
+      missing.map(([name, type]) =>
+        d1.prepare(`ALTER TABLE conversation_surveys ADD COLUMN ${name} ${type}`),
+      ),
+    );
+  }
+
+  await d1.batch([
+    d1.prepare(
+      `UPDATE conversation_surveys
+       SET mood_quadrant = (SELECT quadrant FROM check_ins WHERE check_ins.id = conversation_surveys.check_in_id),
+           mood_emotion = (SELECT emotion FROM check_ins WHERE check_ins.id = conversation_surveys.check_in_id)
+       WHERE mood_quadrant IS NULL`,
+    ),
+    d1.prepare(
+      `UPDATE conversation_surveys
+       SET matched_mood_quadrant = (
+             SELECT other_ci.quadrant
+             FROM matchmaking_tickets mt
+             JOIN matchmaking_tickets other_mt
+               ON other_mt.conversation_id = mt.conversation_id
+              AND other_mt.user_email <> mt.user_email
+             JOIN check_ins other_ci ON other_ci.id = other_mt.check_in_id
+             WHERE mt.check_in_id = conversation_surveys.check_in_id
+               AND mt.user_email = conversation_surveys.user_email
+             ORDER BY other_mt.created_at DESC LIMIT 1
+           ),
+           matched_mood_emotion = (
+             SELECT other_ci.emotion
+             FROM matchmaking_tickets mt
+             JOIN matchmaking_tickets other_mt
+               ON other_mt.conversation_id = mt.conversation_id
+              AND other_mt.user_email <> mt.user_email
+             JOIN check_ins other_ci ON other_ci.id = other_mt.check_in_id
+             WHERE mt.check_in_id = conversation_surveys.check_in_id
+               AND mt.user_email = conversation_surveys.user_email
+             ORDER BY other_mt.created_at DESC LIMIT 1
+           )
+       WHERE matched_mood_quadrant IS NULL`,
+    ),
+  ]);
+}
+
 export function ensureDbSchema() {
   schemaReady ??= (async () => {
     const d1 = getD1();
@@ -164,6 +224,7 @@ export function ensureDbSchema() {
         "CREATE INDEX IF NOT EXISTS oauth_identities_user_idx ON oauth_identities (user_email)",
       ),
     ]);
+    await ensureConversationSurveyMoodColumns(d1);
   })().catch((error) => {
     schemaReady = null;
     throw error;
