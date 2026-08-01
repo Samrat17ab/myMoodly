@@ -205,38 +205,63 @@ export async function POST(request: Request) {
         return jsonError("Complete survey answers are required");
       }
 
-      const ownCheckIn = await d1
-        .prepare(
-          "SELECT quadrant, emotion FROM check_ins WHERE id = ? AND user_email = ? LIMIT 1",
-        )
-        .bind(checkInId, email)
-        .first<{ quadrant: string; emotion: string }>();
-      if (!ownCheckIn) return jsonError("Check-in not found", 404);
+      const [ownCheckInResult, partnerCheckInResult, profileResult, sessionResult] =
+        await d1.batch([
+          d1
+            .prepare(
+              "SELECT quadrant, emotion FROM check_ins WHERE id = ? AND user_email = ? LIMIT 1",
+            )
+            .bind(checkInId, email),
+          d1
+            .prepare(
+              `SELECT other_ci.quadrant AS quadrant, other_ci.emotion AS emotion
+               FROM matchmaking_tickets mt
+               JOIN matchmaking_tickets other_mt
+                 ON other_mt.conversation_id = mt.conversation_id
+                AND other_mt.user_email <> mt.user_email
+               JOIN check_ins other_ci ON other_ci.id = other_mt.check_in_id
+               WHERE mt.check_in_id = ?
+                 AND mt.user_email = ?
+                 AND mt.conversation_id IS NOT NULL
+               ORDER BY other_mt.created_at DESC
+               LIMIT 1`,
+            )
+            .bind(checkInId, email),
+          d1.prepare("SELECT age, gender FROM profiles WHERE email = ? LIMIT 1").bind(email),
+          d1
+            .prepare(
+              `SELECT CAST(ROUND((julianday(c.ended_at) - julianday(c.created_at)) * 86400) AS INTEGER) AS seconds
+               FROM matchmaking_tickets mt
+               JOIN conversations c ON c.id = mt.conversation_id
+               WHERE mt.check_in_id = ?
+                 AND mt.user_email = ?
+                 AND c.ended_at IS NOT NULL
+               ORDER BY mt.created_at DESC
+               LIMIT 1`,
+            )
+            .bind(checkInId, email),
+        ]);
 
-      const partnerCheckIn = await d1
-        .prepare(
-          `SELECT other_ci.quadrant AS quadrant, other_ci.emotion AS emotion
-           FROM matchmaking_tickets mt
-           JOIN matchmaking_tickets other_mt
-             ON other_mt.conversation_id = mt.conversation_id
-            AND other_mt.user_email <> mt.user_email
-           JOIN check_ins other_ci ON other_ci.id = other_mt.check_in_id
-           WHERE mt.check_in_id = ?
-             AND mt.user_email = ?
-             AND mt.conversation_id IS NOT NULL
-           ORDER BY other_mt.created_at DESC
-           LIMIT 1`,
-        )
-        .bind(checkInId, email)
-        .first<{ quadrant: string; emotion: string }>();
+      const ownCheckIn = ownCheckInResult.results[0] as
+        | { quadrant: string; emotion: string }
+        | undefined;
+      if (!ownCheckIn) return jsonError("Check-in not found", 404);
+      const partnerCheckIn = partnerCheckInResult.results[0] as
+        | { quadrant: string; emotion: string }
+        | undefined;
+      const profile = profileResult.results[0] as
+        | { age: number; gender: string }
+        | undefined;
+      const session = sessionResult.results[0] as { seconds: number | null } | undefined;
 
       const id = crypto.randomUUID();
       await d1
         .prepare(
           `INSERT INTO conversation_surveys
             (id, check_in_id, user_email, understood, mood_change,
-             mood_quadrant, mood_emotion, matched_mood_quadrant, matched_mood_emotion)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             mood_quadrant, mood_emotion, matched_mood_quadrant, matched_mood_emotion,
+             age, gender, chat_session_seconds)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -248,6 +273,9 @@ export async function POST(request: Request) {
           ownCheckIn.emotion,
           partnerCheckIn?.quadrant ?? null,
           partnerCheckIn?.emotion ?? null,
+          profile?.age ?? null,
+          profile?.gender ?? null,
+          session?.seconds ?? null,
         )
         .run();
 

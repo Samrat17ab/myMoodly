@@ -84,6 +84,52 @@ async function ensureConversationSurveyMoodColumns(d1: D1Database) {
   ]);
 }
 
+// Same idea for age, gender, and chat session length -- added after the
+// table already existed in production, so they need adding and backfilling.
+async function ensureConversationSurveyDemographicColumns(d1: D1Database) {
+  const columns = await d1
+    .prepare("PRAGMA table_info(conversation_surveys)")
+    .all<{ name: string }>();
+  const existing = new Set(columns.results.map((column) => column.name));
+  const missing = (
+    [
+      ["age", "INTEGER"],
+      ["gender", "TEXT"],
+      ["chat_session_seconds", "INTEGER"],
+    ] as const
+  ).filter(([name]) => !existing.has(name));
+
+  if (missing.length > 0) {
+    await d1.batch(
+      missing.map(([name, type]) =>
+        d1.prepare(`ALTER TABLE conversation_surveys ADD COLUMN ${name} ${type}`),
+      ),
+    );
+  }
+
+  await d1.batch([
+    d1.prepare(
+      `UPDATE conversation_surveys
+       SET age = (SELECT age FROM profiles WHERE profiles.email = conversation_surveys.user_email),
+           gender = (SELECT gender FROM profiles WHERE profiles.email = conversation_surveys.user_email)
+       WHERE age IS NULL`,
+    ),
+    d1.prepare(
+      `UPDATE conversation_surveys
+       SET chat_session_seconds = (
+             SELECT CAST(ROUND((julianday(c.ended_at) - julianday(c.created_at)) * 86400) AS INTEGER)
+             FROM matchmaking_tickets mt
+             JOIN conversations c ON c.id = mt.conversation_id
+             WHERE mt.check_in_id = conversation_surveys.check_in_id
+               AND mt.user_email = conversation_surveys.user_email
+               AND c.ended_at IS NOT NULL
+             ORDER BY mt.created_at DESC LIMIT 1
+           )
+       WHERE chat_session_seconds IS NULL`,
+    ),
+  ]);
+}
+
 export function ensureDbSchema() {
   schemaReady ??= (async () => {
     const d1 = getD1();
@@ -225,6 +271,7 @@ export function ensureDbSchema() {
       ),
     ]);
     await ensureConversationSurveyMoodColumns(d1);
+    await ensureConversationSurveyDemographicColumns(d1);
   })().catch((error) => {
     schemaReady = null;
     throw error;

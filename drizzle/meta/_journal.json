@@ -43,6 +43,13 @@
       "when": 1785605686731,
       "tag": "0005_pale_miek",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785606770376,
+      "tag": "0006_hard_iceman",
+      "breakpoints": true
     }
   ]
 }

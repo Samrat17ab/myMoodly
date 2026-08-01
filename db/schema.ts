@@ -76,6 +76,9 @@ export const conversationSurveys = sqliteTable(
     moodEmotion: text("mood_emotion"),
     matchedMoodQuadrant: text("matched_mood_quadrant"),
     matchedMoodEmotion: text("matched_mood_emotion"),
+    age: integer("age"),
+    gender: text("gender"),
+    chatSessionSeconds: integer("chat_session_seconds"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
