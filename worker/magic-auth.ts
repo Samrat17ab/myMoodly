@@ -1,8 +1,14 @@
 export const SESSION_COOKIE = "moodly_session";
 export const GOOGLE_OAUTH_STATE_COOKIE = "moodly_google_state";
-export const MAGIC_LINK_TTL_SECONDS = 15 * 60;
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const OAUTH_STATE_TTL_SECONDS = 10 * 60;
+export const OTP_TTL_SECONDS = 10 * 60;
+export const OTP_MAX_ATTEMPTS = 5;
+export const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
+// When false, /api/auth/request-code signs the given email in immediately
+// without sending or checking a one-time code.
+export const REQUIRE_EMAIL_VERIFICATION = true;
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -10,6 +16,11 @@ export function normalizeEmail(value: unknown) {
   if (typeof value !== "string") return "";
   const email = value.trim().toLowerCase();
   return email.length <= 254 && emailPattern.test(email) ? email : "";
+}
+
+export function createOtpCode() {
+  const value = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
+  return value.toString().padStart(6, "0");
 }
 
 export function createOpaqueToken(byteLength = 32) {

@@ -41,7 +41,7 @@ export default function PrivacyPolicy() {
           <ul>
             <li>
               <strong>Account information:</strong> your email address when you
-              sign in with a magic link or Google.
+              sign in with a one-time verification code or Google.
             </li>
             <li>
               <strong>Private profile information:</strong> age, gender choice
@@ -121,7 +121,8 @@ export default function PrivacyPolicy() {
               <strong>Service providers:</strong> Cloudflare provides hosting,
               database, networking, and security services; Google provides
               OAuth authentication when you choose Google sign-in; and email
-              providers deliver magic-link and support emails. They process
+              providers deliver one-time verification codes and support
+              emails. They process
               information on our behalf or under their own applicable terms.
             </li>
             <li>
@@ -163,7 +164,7 @@ export default function PrivacyPolicy() {
             long as reasonably needed to provide the service, preserve safety
             records, resolve disputes, enforce agreements, and meet legal
             obligations. Expired authentication sessions and one-time OAuth or
-            magic-link records are periodically removed. When we complete a
+            verification code records are periodically removed. When we complete a
             verified deletion request, we delete or anonymize associated
             information unless retention is required for security or legal
             reasons. Backup copies may remain for a limited period before being

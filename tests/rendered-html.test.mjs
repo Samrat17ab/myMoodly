@@ -23,8 +23,8 @@ test("uses secure email and Google authentication instead of the demo login", as
   const [app, requestRoute, verifyRoute, sessionRoute, googleStart, googleCallback, accessAuth, smtp] =
     await Promise.all([
       readFile(projectFile("app/MoodlyApp.tsx"), "utf8"),
-      readFile(projectFile("app/api/auth/magic-link/route.ts"), "utf8"),
-      readFile(projectFile("app/api/auth/verify/route.ts"), "utf8"),
+      readFile(projectFile("app/api/auth/request-code/route.ts"), "utf8"),
+      readFile(projectFile("app/api/auth/verify-otp/route.ts"), "utf8"),
       readFile(projectFile("app/api/auth/session/route.ts"), "utf8"),
       readFile(projectFile("app/api/auth/google/start/route.ts"), "utf8"),
       readFile(projectFile("app/api/auth/google/callback/route.ts"), "utf8"),
@@ -32,15 +32,17 @@ test("uses secure email and Google authentication instead of the demo login", as
       readFile(projectFile("worker/smtp.ts"), "utf8"),
     ]);
 
-  assert.match(app, /\/api\/auth\/magic-link/);
+  assert.match(app, /\/api\/auth\/request-code/);
+  assert.match(app, /\/api\/auth\/verify-otp/);
   assert.match(app, /\/api\/auth\/session/);
   assert.match(app, /\/api\/auth\/google\/start/);
   assert.match(app, /Continue with Google/);
   assert.doesNotMatch(app, /google-demo@moodly\.local/);
   assert.doesNotMatch(app, /Open secure sign-in link/);
 
-  assert.match(requestRoute, /MAGIC_LINK_TTL_SECONDS/);
-  assert.match(requestRoute, /sendMagicLinkEmail/);
+  assert.match(requestRoute, /OTP_TTL_SECONDS/);
+  assert.match(requestRoute, /sendOtpEmail/);
+  assert.match(requestRoute, /REQUIRE_EMAIL_VERIFICATION/);
   assert.match(verifyRoute, /used_at IS NULL/);
   assert.match(verifyRoute, /sessionCookie/);
   assert.match(sessionRoute, /clearSessionCookie/);

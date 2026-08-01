@@ -118,15 +118,16 @@ export function ensureDbSchema() {
       d1.prepare(
         "CREATE INDEX IF NOT EXISTS conversation_messages_room_created_idx ON conversation_messages (conversation_id, created_at)",
       ),
-      d1.prepare(`CREATE TABLE IF NOT EXISTS magic_link_tokens (
-        token_hash TEXT PRIMARY KEY NOT NULL,
+      d1.prepare(`CREATE TABLE IF NOT EXISTS otp_codes (
+        code_hash TEXT PRIMARY KEY NOT NULL,
         email TEXT NOT NULL,
         expires_at INTEGER NOT NULL,
         requested_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        attempts INTEGER NOT NULL DEFAULT 0,
         used_at INTEGER
       )`),
       d1.prepare(
-        "CREATE INDEX IF NOT EXISTS magic_link_tokens_email_requested_idx ON magic_link_tokens (email, requested_at)",
+        "CREATE INDEX IF NOT EXISTS otp_codes_email_requested_idx ON otp_codes (email, requested_at)",
       ),
       d1.prepare(`CREATE TABLE IF NOT EXISTS auth_sessions (
         token_hash TEXT PRIMARY KEY NOT NULL,

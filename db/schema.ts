@@ -163,22 +163,20 @@ export const conversationMessages = sqliteTable(
   ],
 );
 
-export const magicLinkTokens = sqliteTable(
-  "magic_link_tokens",
+export const otpCodes = sqliteTable(
+  "otp_codes",
   {
-    tokenHash: text("token_hash").primaryKey(),
+    codeHash: text("code_hash").primaryKey(),
     email: text("email").notNull(),
     expiresAt: integer("expires_at").notNull(),
     requestedAt: integer("requested_at")
       .notNull()
       .default(sql`(unixepoch())`),
+    attempts: integer("attempts").notNull().default(0),
     usedAt: integer("used_at"),
   },
   (table) => [
-    index("magic_link_tokens_email_requested_idx").on(
-      table.email,
-      table.requestedAt,
-    ),
+    index("otp_codes_email_requested_idx").on(table.email, table.requestedAt),
   ],
 );
 
