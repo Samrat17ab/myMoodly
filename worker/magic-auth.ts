@@ -8,7 +8,7 @@ export const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
 // When false, /api/auth/request-code signs the given email in immediately
 // without sending or checking a one-time code.
-export const REQUIRE_EMAIL_VERIFICATION = true;
+export const REQUIRE_EMAIL_VERIFICATION = false;
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

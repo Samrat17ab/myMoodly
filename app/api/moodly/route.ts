@@ -4,6 +4,7 @@ import {
   authenticatedRequestEmail,
   type AccessAuthEnv,
 } from "@/worker/access-auth";
+import { clearSessionCookie } from "@/worker/magic-auth";
 
 type ProfilePayload = {
   age?: string | number;
@@ -218,6 +219,32 @@ export async function POST(request: Request) {
     }
 
     return jsonError("Unknown operation");
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    await ensureDbSchema();
+    const email = await authenticatedRequestEmail(
+      request,
+      env as unknown as AccessAuthEnv,
+    );
+    if (!email) return jsonError("Authentication required", 401);
+
+    const d1 = getD1();
+    await d1.batch([
+      d1.prepare("DELETE FROM profiles WHERE email = ?").bind(email),
+      d1.prepare("DELETE FROM auth_sessions WHERE user_email = ?").bind(email),
+      d1.prepare("DELETE FROM oauth_identities WHERE user_email = ?").bind(email),
+      d1.prepare("DELETE FROM otp_codes WHERE email = ?").bind(email),
+    ]);
+
+    return Response.json(
+      { deleted: true },
+      { headers: { "set-cookie": clearSessionCookie() } },
+    );
   } catch (error) {
     return errorResponse(error);
   }

@@ -40,6 +40,11 @@ const countries = ["Nepal","India","United States","United Kingdom","Australia",
 const languages = ["English","Nepali","Hindi","Spanish","French","German","Mandarin","Japanese"];
 const emptyProfile: Profile = { age:"", gender:"", customGender:"", country:"Nepal", languages:["English"], terms:false };
 
+function initialsFor(email: string) {
+  const local = email.split("@")[0]?.replace(/[^a-zA-Z]/g, "") ?? "";
+  return (local.slice(0, 2) || "?").toUpperCase();
+}
+
 async function readApiResponse(response: Response) {
   const data = await response.json() as Record<string, unknown>;
   if (!response.ok) throw new Error(String(data.error ?? "myMoodly could not save your data."));
@@ -78,6 +83,7 @@ export default function MoodlyApp() {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [authSending, setAuthSending] = useState(false);
+  const [accountBusy, setAccountBusy] = useState(false);
   const [chatSeconds, setChatSeconds] = useState(1200);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -320,6 +326,42 @@ export default function MoodlyApp() {
       setToast(error instanceof Error ? error.message : "Could not save your profile.");
     }
   };
+  const signOut = async () => {
+    if (accountBusy) return;
+    setAccountBusy(true);
+    try {
+      await fetch("/api/auth/session", { method: "DELETE" });
+    } catch {
+      // Clearing local state below still signs the user out of this device.
+    } finally {
+      setEmail("");
+      setOtp("");
+      setOtpSent(false);
+      setProfile(emptyProfile);
+      setUsage(0);
+      setView("welcome");
+      setToast("You've been signed out.");
+      setAccountBusy(false);
+    }
+  };
+  const deleteAccount = async () => {
+    if (accountBusy) return;
+    setAccountBusy(true);
+    try {
+      await readApiResponse(await fetch("/api/moodly", { method: "DELETE" }));
+      setEmail("");
+      setOtp("");
+      setOtpSent(false);
+      setProfile(emptyProfile);
+      setUsage(0);
+      setView("welcome");
+      setToast("Your account and data have been deleted.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not delete your account.");
+    } finally {
+      setAccountBusy(false);
+    }
+  };
   const startQueue = async () => {
     try {
       const data = await saveMoodlyData({
@@ -452,7 +494,7 @@ export default function MoodlyApp() {
 
   return (
     <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
-      {view !== "chat" && <AppHeader usage={usage} onHome={() => setView("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
+      {view !== "chat" && <AppHeader usage={usage} email={email} onHome={() => setView("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
       {view === "home" && <Home usage={usage} onStart={() => usage >= 10 ? setView("paywall") : setView("energy")} onGuide={() => openOverlay("guide")}/>}
       {view === "energy" && <Question step={1} title="How's your energy right now?" subtitle="Don't overthink it — choose what feels closest." onBack={() => setView("home")}>
         <div className="choice-grid">
@@ -519,7 +561,7 @@ export default function MoodlyApp() {
       {view === "paywall" && <Paywall onBack={() => setView("home")} onUpgrade={() => setToast("Secure subscription checkout is ready for your payment provider.")}/>}
       {view === "resources" && <Resources country={profile.country} onBack={() => setView(prior)}/>}
       {view === "guide" && <Guide onBack={() => setView(prior)}/>}
-      {view === "settings" && <Settings profile={profile} setProfile={setProfile} onBack={() => setView(prior)} onSave={() => void saveProfile(prior)}/>}
+      {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} usage={usage} busy={accountBusy} onBack={() => setView(prior)} onSave={() => void saveProfile(prior)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()}/>}
       {toast && <div className="toast">{toast}</div>}
     </main>
   );
@@ -527,7 +569,7 @@ export default function MoodlyApp() {
 
 function Brand(){ return <div className="brand"><span>m</span><b>myMoodly</b></div>; }
 function Progress({step}:{step:number}){ return <div className="progress"><span>Step {step} of 5</span><div>{[1,2,3,4,5].map(n => <i className={n<=step?"on":""} key={n}/>)}</div></div>; }
-function AppHeader({usage,onHome,onGuide,onHelp,onSettings}:{usage:number,onHome:()=>void,onGuide:()=>void,onHelp:()=>void,onSettings:()=>void}){ return <header className="app-header"><button onClick={onHome}><Brand/></button><div className="app-nav"><span className="usage"><i>{usage}</i> of 10 connections today</span><button onClick={onGuide}>? <b>Guide</b></button><button className="help-now" onClick={onHelp}>♡ Need help now?</button><button className="mini-avatar" onClick={onSettings}>SL</button></div></header>; }
+function AppHeader({usage,email,onHome,onGuide,onHelp,onSettings}:{usage:number,email:string,onHome:()=>void,onGuide:()=>void,onHelp:()=>void,onSettings:()=>void}){ return <header className="app-header"><button onClick={onHome}><Brand/></button><div className="app-nav"><span className="usage"><i>{usage}</i> of 10 connections today</span><button onClick={onGuide}>? <b>Guide</b></button><button className="help-now" onClick={onHelp}>♡ Need help now?</button><button className="mini-avatar" onClick={onSettings} title="Account settings">{initialsFor(email)}</button></div></header>; }
 function Question({step,title,subtitle,onBack,children}:{step:number,title:string,subtitle:string,onBack:()=>void,children:React.ReactNode}){ return <section className="panel question-panel"><Progress step={step}/><button className="back" onClick={onBack}>←</button><div className="center-head"><span className="overline">CHECK IN WITH YOURSELF</span><h2>{title}</h2><p>{subtitle}</p></div>{children}<p className="reassure">There are no wrong answers here.</p></section>; }
 function Home({usage,onStart,onGuide}:{usage:number,onStart:()=>void,onGuide:()=>void}){ return <section className="home-view"><div className="home-copy"><span className="overline">A QUIET SPACE TO BE HONEST</span><h1>How are you,<br/><em>really?</em></h1><p>Take a breath. Name what you're feeling, then connect with someone who can meet you there.</p><button className="primary large" onClick={onStart}>Start a mood check-in <span>→</span></button><button className="watch" onClick={onGuide}>▷ How myMoodly works</button></div><div className="home-visual"><div className="halo"/><div className="breath-card"><div className="breath-orb">⌁</div><span>Take a moment</span><b>There's space for<br/>whatever you feel.</b><small>Inhale · Exhale</small></div><div className="float-note fn1">“I felt heard.”</div><div className="float-note fn2">Anonymous & private</div></div><div className="today-card"><div><span>Today's connections</span><b>{usage} <small>/ 10 free</small></b></div><div className="usage-line"><i style={{width:`${usage*10}%`}}/></div><p>Your count resets at midnight UTC.</p></div></section>; }
 
@@ -538,5 +580,39 @@ function Modal({title,onClose,children}:{title:string,onClose:()=>void,children:
 function Resources({country,onBack}:{country:string,onBack:()=>void}){ return <section className="resource-view"><button className="back" onClick={onBack}>←</button><div className="resource-head"><span>♡</span><div><small>IMMEDIATE SUPPORT</small><h1>Need help right now?</h1><p>myMoodly isn't a crisis service, but you don't have to face this moment alone.</p></div></div><div className="resource-layout"><div><h3>Emergency contacts for {country}</h3>{country==="Nepal"?<><ResourceCard title="National Suicide Prevention Helpline" number="1166" note="Free, nationwide support"/><ResourceCard title="Police emergency" number="100" note="For immediate danger"/><ResourceCard title="Ambulance" number="102" note="Emergency medical support"/></>:<><ResourceCard title="Local emergency services" number="112 / 911" note="Use the number available in your country"/><ResourceCard title="Find a crisis centre" number="findahelpline.com" note="Verified helplines in 175+ countries"/></>}<p className="resource-foot">If a number doesn't connect, call your local emergency service or go to the nearest emergency department.</p></div><aside><h3>While you reach out</h3><p>Move to a place where other people are nearby.</p><p>Put distance between you and anything you could use to hurt yourself.</p><p>Text or call someone you trust and say: “I need you with me right now.”</p></aside></div></section>; }
 function ResourceCard({title,number,note}:{title:string,number:string,note:string}){ return <div className="resource-card"><span>☎</span><div><b>{title}</b><small>{note}</small></div><a href={number.match(/^\d/) ? `tel:${number.replace(/\D/g,"")}`:`https://${number}`}>{number}</a></div>; }
 function Guide({onBack}:{onBack:()=>void}){ const items=[["01","Name what you feel","Two quick questions guide you to one of 100 precise emotion words."],["02","Choose your intention","Talk with someone who feels similar, or someone in a different headspace."],["03","Meet anonymously","You're matched by mood and shared language — never by country, age, or gender."],["04","Talk for 20 minutes","A quiet timer keeps things contained. Continue only when you both agree."],["05","Stay in control","Report or block at any time. Emergency resources are always one tap away."]]; return <section className="guide-view"><button className="back" onClick={onBack}>←</button><span className="overline">HOW MYMOODLY WORKS</span><h1>A small check-in.<br/>A real human moment.</h1><div className="guide-grid">{items.map(x=><div key={x[0]}><i>{x[0]}</i><b>{x[1]}</b><p>{x[2]}</p></div>)}</div><div className="guide-limit"><b>10 conversations a day are free.</b><span>Need more? myMoodly Unlimited is ₹1,000/month.</span></div></section>; }
-function Settings({profile,setProfile,onBack,onSave}:{profile:Profile,setProfile:(p:Profile)=>void,onBack:()=>void,onSave:()=>void}){ return <section className="settings-view"><button className="back" onClick={onBack}>←</button><span className="overline">ACCOUNT SETTINGS</span><h1>Your private profile</h1><p>These details are never visible to conversation partners.</p><label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><div className="settings-card"><span className="avatar large-avatar">SL</span><div><b>Your anonymous name changes every 24 hours</b><p>Today's name: <strong>Quiet Sparrow</strong></p></div></div><button className="primary" onClick={onSave}>Save changes</button></section>; }
+function Settings({profile,setProfile,email,usage,busy,onBack,onSave,onSignOut,onDeleteAccount}:{profile:Profile,setProfile:(p:Profile)=>void,email:string,usage:number,busy:boolean,onBack:()=>void,onSave:()=>void,onSignOut:()=>void,onDeleteAccount:()=>void}){
+  const [confirmDelete,setConfirmDelete]=useState(false);
+  const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]});
+  return <section className="settings-view">
+    <button className="back" onClick={onBack}>←</button>
+    <span className="overline">ACCOUNT SETTINGS</span>
+    <h1>Your private profile</h1>
+    <p>These details are never visible to conversation partners.</p>
+    <div className="settings-card">
+      <span className="avatar large-avatar">{initialsFor(email)}</span>
+      <div><b>Signed in as</b><p>{email}</p></div>
+    </div>
+    <div className="settings-card">
+      <span className="avatar large-avatar">◔</span>
+      <div><b>Today's connections</b><p>{usage} of 10 free connections used · resets at midnight UTC</p></div>
+    </div>
+    <div className="form-grid">
+      <label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label>
+      <label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>
+      {profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}
+      <label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label>
+      <fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset>
+    </div>
+    <button className="primary" disabled={busy} onClick={onSave}>Save changes</button>
+    <div className="settings-actions">
+      <button className="text-button skip" disabled={busy} onClick={onSignOut}>{busy?"Working…":"Sign out"}</button>
+      <button className="text-button skip danger" disabled={busy} onClick={()=>setConfirmDelete(true)}>Delete account &amp; data</button>
+    </div>
+    {confirmDelete&&<Modal title="Delete your account?" onClose={()=>setConfirmDelete(false)}>
+      <p className="modal-copy">This permanently deletes your profile, mood check-ins, and conversation history. This can&apos;t be undone.</p>
+      <button className="primary wide danger-solid" disabled={busy} onClick={()=>{setConfirmDelete(false);onDeleteAccount();}}>{busy?"Deleting…":"Yes, delete everything"}</button>
+      <button className="text-button skip" disabled={busy} onClick={()=>setConfirmDelete(false)}>Cancel</button>
+    </Modal>}
+  </section>;
+}
 function Paywall({onBack,onUpgrade}:{onBack:()=>void,onUpgrade:()=>void}){ return <section className="paywall"><button className="back" onClick={onBack}>←</button><div className="pay-visual"><span>∞</span></div><span className="overline">MOODLY UNLIMITED</span><h1>Keep the conversation open.</h1><p>You've used today's 10 free connections. Upgrade for unlimited, anonymous conversations whenever you need them.</p><div className="price"><b>₹1,000</b><span>/ month</span></div><ul><li>Unlimited daily connections</li><li>Cancel anytime</li><li>Your core experience stays private</li></ul><button className="primary wide" onClick={onUpgrade}>Upgrade securely <span>→</span></button><small>Free connections reset at midnight UTC.</small></section>; }
