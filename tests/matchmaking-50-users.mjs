@@ -146,6 +146,17 @@ for (const [conversationId, members] of conversations) {
   assert.equal(results.get(first.email).chatStartsAt, results.get(second.email).chatStartsAt);
 }
 
+// Every user's own anonymous name is the partnerName their partner sees, so
+// collecting both directions across all 25 conversations covers all 50
+// assigned names.
+const anonymousNames = users.map((user) => results.get(user.email).partnerName);
+assert.equal(anonymousNames.length, 50);
+assert.equal(
+  new Set(anonymousNames).size,
+  50,
+  "No two concurrently matched users may share an anonymous name.",
+);
+
 console.log(JSON.stringify({
   users: users.length,
   conversations: conversations.size,
@@ -154,4 +165,5 @@ console.log(JSON.stringify({
   moodRulesVerified: true,
   partnerCheckInsVerified: true,
   synchronizedStartVerified: true,
+  uniqueAnonymousNamesVerified: true,
 }));

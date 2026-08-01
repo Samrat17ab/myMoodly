@@ -35,15 +35,96 @@ const SYNCHRONIZED_CHAT_DELAY_SECONDS = 2;
 
 const adjectives = [
   "Gentle", "Quiet", "Kind", "Warm", "Brave", "Calm", "Bright", "Patient",
+  "Soft", "Steady", "Humble", "Cheerful", "Hopeful", "Curious", "Thoughtful",
+  "Sincere", "Tender", "Serene", "Radiant", "Playful", "Graceful", "Loyal",
+  "Wise", "Nimble", "Breezy", "Cozy", "Earnest", "Mellow", "Sunny", "Dreamy",
+  "Quirky", "Gallant", "Jolly", "Lively", "Mindful", "Peaceful", "Spirited",
+  "Trusty", "Vivid", "Whimsical",
 ];
 const animals = [
   "Otter", "Sparrow", "Panda", "Fox", "Koala", "Robin", "Dolphin", "Deer",
+  "Owl", "Hedgehog", "Rabbit", "Heron", "Badger", "Finch", "Seal", "Lynx",
+  "Falcon", "Wren", "Beaver", "Swan", "Turtle", "Squirrel", "Raven", "Moose",
+  "Puffin", "Gazelle", "Panther", "Lemur", "Egret", "Marten", "Ibis", "Vole",
+  "Stag", "Crane", "Kite", "Newt", "Mink", "Tern", "Whale", "Bison",
 ];
 
-function anonymousName() {
-  const bytes = new Uint8Array(2);
+// Attempt 0 yields a plain "Adjective Animal" name (~1,600 combinations).
+// Later attempts append a random number for a far larger space, so retries
+// after a name collision converge quickly even under heavy concurrent load.
+function anonymousName(attempt = 0) {
+  const bytes = new Uint8Array(4);
   crypto.getRandomValues(bytes);
-  return `${adjectives[bytes[0] % adjectives.length]} ${animals[bytes[1] % animals.length]}`;
+  const base = `${adjectives[bytes[0] % adjectives.length]} ${animals[bytes[1] % animals.length]}`;
+  if (attempt <= 0) return base;
+  const suffix = 1 + (((bytes[2] << 8) | bytes[3]) % 9999);
+  return `${base} ${suffix}`;
+}
+
+// Reserves two globally-unique-among-active-conversations anonymous names and
+// creates the conversation, its members, and the matched tickets atomically.
+// Uniqueness is enforced by the database (a PRIMARY KEY on
+// active_anonymous_names.name), not just by picking from a large word list,
+// so it holds even if two matches are created concurrently.
+async function createConversationWithUniqueNames(
+  d1: D1Database,
+  conversationId: string,
+  conversationCreatedAt: string,
+  memberA: string,
+  memberB: string,
+  ticketIds: [string, string],
+) {
+  const MAX_ATTEMPTS = 12;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const forceUnique = attempt === MAX_ATTEMPTS - 1;
+    const nameA = forceUnique
+      ? `${anonymousName()} ${crypto.randomUUID().slice(0, 8)}`
+      : anonymousName(attempt);
+    let nameB = forceUnique
+      ? `${anonymousName()} ${crypto.randomUUID().slice(0, 8)}`
+      : anonymousName(attempt);
+    if (nameB === nameA) nameB = `${nameB} ${crypto.randomUUID().slice(0, 4)}`;
+
+    try {
+      await d1.batch([
+        d1
+          .prepare(`INSERT INTO conversations (id, status, created_at) VALUES (?, 'active', ?)`)
+          .bind(conversationId, conversationCreatedAt),
+        d1
+          .prepare("INSERT INTO active_anonymous_names (name, conversation_id) VALUES (?, ?)")
+          .bind(nameA, conversationId),
+        d1
+          .prepare("INSERT INTO active_anonymous_names (name, conversation_id) VALUES (?, ?)")
+          .bind(nameB, conversationId),
+        d1
+          .prepare(
+            `INSERT INTO conversation_members
+              (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
+          )
+          .bind(conversationId, memberA, nameA),
+        d1
+          .prepare(
+            `INSERT INTO conversation_members
+              (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
+          )
+          .bind(conversationId, memberB, nameB),
+        d1
+          .prepare(
+            `UPDATE matchmaking_tickets
+             SET status = 'matched', conversation_id = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id IN (?, ?) AND status = 'waiting'`,
+          )
+          .bind(conversationId, ticketIds[0], ticketIds[1]),
+      ]);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Could not allocate unique anonymous names.");
 }
 
 async function ensureRealtimeSchema(d1: D1Database) {
@@ -80,6 +161,10 @@ async function ensureRealtimeSchema(d1: D1Database) {
       body TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS active_anonymous_names (
+      name TEXT PRIMARY KEY NOT NULL,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE
+    )`),
     d1.prepare(
       "CREATE INDEX IF NOT EXISTS matchmaking_tickets_status_created_idx ON matchmaking_tickets (status, created_at)",
     ),
@@ -88,6 +173,9 @@ async function ensureRealtimeSchema(d1: D1Database) {
     ),
     d1.prepare(
       "CREATE INDEX IF NOT EXISTS conversation_messages_room_created_idx ON conversation_messages (conversation_id, created_at)",
+    ),
+    d1.prepare(
+      "CREATE INDEX IF NOT EXISTS active_anonymous_names_conversation_idx ON active_anonymous_names (conversation_id)",
     ),
   ]);
 }
@@ -115,6 +203,12 @@ async function expireStaleRealtimeState(d1: D1Database) {
          AND conversation_id IN (
            SELECT id FROM conversations WHERE status <> 'active'
          )`,
+    ),
+    d1.prepare(
+      `DELETE FROM active_anonymous_names
+       WHERE conversation_id IN (
+         SELECT id FROM conversations WHERE status <> 'active'
+       )`,
     ),
   ]);
 }
@@ -326,33 +420,14 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
 
     const conversationId = crypto.randomUUID();
     const conversationCreatedAt = new Date().toISOString();
-    await this.env.DB.batch([
-      this.env.DB
-        .prepare(
-          `INSERT INTO conversations (id, status, created_at)
-           VALUES (?, 'active', ?)`,
-        )
-        .bind(conversationId, conversationCreatedAt),
-      this.env.DB
-        .prepare(
-          `INSERT INTO conversation_members
-            (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
-        )
-        .bind(conversationId, current.user_email, anonymousName()),
-      this.env.DB
-        .prepare(
-          `INSERT INTO conversation_members
-            (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
-        )
-        .bind(conversationId, candidate.user_email, anonymousName()),
-      this.env.DB
-        .prepare(
-          `UPDATE matchmaking_tickets
-           SET status = 'matched', conversation_id = ?, updated_at = CURRENT_TIMESTAMP
-           WHERE id IN (?, ?) AND status = 'waiting'`,
-        )
-        .bind(conversationId, current.id, candidate.id),
-    ]);
+    await createConversationWithUniqueNames(
+      this.env.DB,
+      conversationId,
+      conversationCreatedAt,
+      current.user_email,
+      candidate.user_email,
+      [current.id, candidate.id],
+    );
   }
 
   private async cancel(email: string, payload: Record<string, unknown>) {
@@ -457,13 +532,17 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
     }
 
     if (payload.type === "end") {
-      await this.env.DB
-        .prepare(
-          `UPDATE conversations SET status = 'ended', ended_at = CURRENT_TIMESTAMP
-           WHERE id = ? AND status = 'active'`,
-        )
-        .bind(attachment.conversationId)
-        .run();
+      await this.env.DB.batch([
+        this.env.DB
+          .prepare(
+            `UPDATE conversations SET status = 'ended', ended_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND status = 'active'`,
+          )
+          .bind(attachment.conversationId),
+        this.env.DB
+          .prepare("DELETE FROM active_anonymous_names WHERE conversation_id = ?")
+          .bind(attachment.conversationId),
+      ]);
       this.broadcast({ type: "ended" });
       return;
     }
