@@ -625,7 +625,7 @@ export default function MoodlyApp() {
   );
 }
 
-function Brand(){ return <div className="brand"><span>m</span><b>myMoodly</b></div>; }
+function Brand(){ return <div className="brand"><span><img src="/logo-mark.svg" alt="" width={22} height={22}/></span><b>myMoodly</b></div>; }
 function Progress({step}:{step:number}){ return <div className="progress"><span>Step {step} of 5</span><div>{[1,2,3,4,5].map(n => <i className={n<=step?"on":""} key={n}/>)}</div></div>; }
 function AppHeader({usage,email,onHome,onGuide,onHelp,onSettings}:{usage:number,email:string,onHome:()=>void,onGuide:()=>void,onHelp:()=>void,onSettings:()=>void}){ return <header className="app-header"><button onClick={onHome}><Brand/></button><div className="app-nav"><span className="usage"><i>{usage}</i> of 10 connections today</span><button onClick={onGuide}>? <b>Guide</b></button><button className="help-now" onClick={onHelp}>♡ Need help now?</button><button className="mini-avatar" onClick={onSettings} title="Account settings">{initialsFor(email)}</button></div></header>; }
 function Question({step,title,subtitle,onBack,children}:{step:number,title:string,subtitle:string,onBack:()=>void,children:React.ReactNode}){ return <section className="panel question-panel"><Progress step={step}/><button className="back" onClick={onBack}>←</button><div className="center-head"><span className="overline">CHECK IN WITH YOURSELF</span><h2>{title}</h2><p>{subtitle}</p></div>{children}<p className="reassure">There are no wrong answers here.</p></section>; }
