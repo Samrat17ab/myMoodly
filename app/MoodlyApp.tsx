@@ -20,10 +20,12 @@ type ChatMessage = {
   time: string;
 };
 type RealtimePacket = {
-  type?: "ready" | "message" | "presence" | "ended" | "error";
+  type?: "ready" | "message" | "presence" | "ended" | "error" | "extended" | "extend-requested";
   history?: ChatMessage[];
   message?: ChatMessage | string;
   online?: number;
+  expiresAt?: number;
+  mine?: boolean;
 };
 type View =
   | "welcome" | "auth" | "onboarding" | "home" | "energy" | "pleasantness"
@@ -111,6 +113,9 @@ export default function MoodlyApp() {
   const [authSending, setAuthSending] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
   const [chatSeconds, setChatSeconds] = useState(1200);
+  const [chatExpiresAt, setChatExpiresAt] = useState<number | null>(null);
+  const [extendRequestedByMe, setExtendRequestedByMe] = useState(false);
+  const [extendRequestedByPartner, setExtendRequestedByPartner] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [menu, setMenu] = useState(false);
@@ -167,6 +172,9 @@ export default function MoodlyApp() {
     matchTransitionRef.current = setTimeout(() => {
       setUsage(value => value + 1);
       setChatSeconds(1200);
+      setChatExpiresAt(null);
+      setExtendRequestedByMe(false);
+      setExtendRequestedByPartner(false);
       setMessages([]);
       navigate("chat");
       matchTransitionRef.current = null;
@@ -266,10 +274,20 @@ export default function MoodlyApp() {
     };
   }, [view, ticketId, email, scheduleMatchedChat, navigate]);
   useEffect(() => {
-    if (view !== "chat") return;
-    const tick = setInterval(() => setChatSeconds(s => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(tick);
-  }, [view]);
+    if (view !== "chat" || !chatExpiresAt) return;
+    // Recomputed from the shared server end-time on every tick (rather than
+    // decremented locally) so a paused JS timer -- backgrounded tab, sleeping
+    // device -- snaps back to the true remaining time the instant it resumes,
+    // instead of resuming a stale local countdown from wherever it left off.
+    const update = () => setChatSeconds(Math.max(0, Math.round((chatExpiresAt - Date.now()) / 1000)));
+    update();
+    const tick = setInterval(update, 1000);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      clearInterval(tick);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, [view, chatExpiresAt]);
   useEffect(() => {
     if (view !== "chat" || !conversationId) return;
     let stopped = false;
@@ -287,8 +305,9 @@ export default function MoodlyApp() {
       socket.onopen = () => setSocketStatus("live");
       socket.onmessage = (event) => {
         const payload = JSON.parse(String(event.data)) as RealtimePacket;
-        if (payload.type === "ready" && Array.isArray(payload.history)) {
-          setMessages(payload.history as ChatMessage[]);
+        if (payload.type === "ready") {
+          if (Array.isArray(payload.history)) setMessages(payload.history as ChatMessage[]);
+          if (typeof payload.expiresAt === "number") setChatExpiresAt(payload.expiresAt);
         } else if (payload.type === "message" && typeof payload.message === "object") {
           const incoming = payload.message as ChatMessage;
           setMessages(current =>
@@ -298,6 +317,14 @@ export default function MoodlyApp() {
           );
         } else if (payload.type === "presence") {
           setOnlineCount(Number(payload.online ?? 0));
+        } else if (payload.type === "extended") {
+          if (typeof payload.expiresAt === "number") setChatExpiresAt(payload.expiresAt);
+          setExtendRequestedByMe(false);
+          setExtendRequestedByPartner(false);
+          setToast("You're both continuing — 20 more minutes added.");
+        } else if (payload.type === "extend-requested") {
+          if (payload.mine) setExtendRequestedByMe(true);
+          else setExtendRequestedByPartner(true);
         } else if (payload.type === "ended") {
           setToast("The conversation has ended.");
           navigate("survey");
@@ -313,9 +340,22 @@ export default function MoodlyApp() {
     };
 
     connect();
+    // A real tab close/navigation-away fires pagehide/beforeunload; an OS or
+    // device sleep does not (the page stays loaded), so this only ends the
+    // conversation when the user actually leaves, never when their device
+    // just goes to sleep mid-chat.
+    const onLeavePage = () => {
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({ type: "end" }));
+      }
+    };
+    window.addEventListener("pagehide", onLeavePage);
+    window.addEventListener("beforeunload", onLeavePage);
     return () => {
       stopped = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      window.removeEventListener("pagehide", onLeavePage);
+      window.removeEventListener("beforeunload", onLeavePage);
       socketRef.current?.close(1000, "Leaving conversation");
       socketRef.current = null;
     };
@@ -471,6 +511,11 @@ export default function MoodlyApp() {
     socketRef.current.send(JSON.stringify({ type:"message", text:clean }));
     setMessage("");
   };
+  const requestExtend = () => {
+    if (socketRef.current?.readyState !== WebSocket.OPEN || extendRequestedByMe) return;
+    socketRef.current.send(JSON.stringify({ type:"extend-request" }));
+    setExtendRequestedByMe(true);
+  };
   const submitSurvey = async () => {
     if (!survey.understood || !survey.change) return setToast("Please answer both questions.");
     try {
@@ -603,6 +648,12 @@ export default function MoodlyApp() {
       </section>}
       {view === "chat" && <section className="chat-view">
         <header className="chat-header"><Brand/><div className="partner"><span className="avatar">{partnerInitials}</span><div><b>{partnerName}</b><small><i/> {onlineCount >= 2 ? "Here with you" : socketStatus === "live" ? "Connected" : "Reconnecting…"}</small></div></div><div className="chat-actions"><div className="timer">◷ {fmt(chatSeconds)}</div><button onClick={() => setMenu(!menu)}>•••</button>{menu && <div className="chat-menu"><button onClick={() => setReport(true)}>⚑ Report conversation</button><button onClick={() => { setToast(`${partnerName} has been blocked.`); endChat(); }}>⊘ Block this person</button><button onClick={endChat}>↗ End conversation</button></div>}</div></header>
+        {chatSeconds > 0 && chatSeconds <= 60 && <div className="extend-banner">
+          {extendRequestedByMe && extendRequestedByPartner ? <span>Extending your conversation…</span>
+            : extendRequestedByMe ? <span>Waiting for {partnerName} to agree to keep chatting…</span>
+            : extendRequestedByPartner ? <><span>{partnerName} wants to keep chatting.</span><button onClick={requestExtend}>Yes, continue</button></>
+            : <><span>1 minute left — keep chatting?</span><button onClick={requestExtend}>Yes, continue</button></>}
+        </div>}
         <div className="chat-note"><span>{partnerName}'s check-in</span><b>{partnerEmotion || "Shared privately"}</b>{partnerNote && <p>“{partnerNote}”</p>}</div>
         <div className="messages"><div className="system-note">You're both anonymous. Messages are delivered live and saved securely for this conversation.</div>{messages.map(m => <div key={m.id} className={`bubble-row ${m.mine?"mine":""}`}><div className="bubble">{m.text}<time>{messageTime(m.time)}</time></div></div>)}</div>
         <div className="composer"><button aria-label="Conversation guidance">＋</button><input value={message} onChange={e => setMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Say what's on your mind…"/><button className="send" onClick={send}>↑</button></div>

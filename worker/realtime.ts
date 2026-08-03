@@ -29,9 +29,17 @@ type WaitingTicketRow = {
 
 const WAITING_TICKET_LIFETIME = "-2 minutes";
 const WAITING_HEARTBEAT_TIMEOUT = "-15 seconds";
-const CONVERSATION_LIFETIME = "-20 minutes";
+const LEGACY_CONVERSATION_LIFETIME = "-20 minutes";
 const MINIMUM_MATCH_WAIT_SECONDS = 3;
 const SYNCHRONIZED_CHAT_DELAY_SECONDS = 2;
+const CHAT_DURATION_SECONDS = 20 * 60;
+
+// D1 timestamps come back either as our own `Date.toISOString()` strings
+// (already has "T" and "Z") or as SQLite's `CURRENT_TIMESTAMP`/`datetime()`
+// format ("YYYY-MM-DD HH:MM:SS", no "T" or "Z"). Normalize before Date.parse.
+function parseSqliteTimestamp(value: string): number {
+  return Date.parse(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
+}
 
 const adjectives = [
   "Gentle", "Quiet", "Kind", "Warm", "Brave", "Calm", "Bright", "Patient",
@@ -70,6 +78,7 @@ async function createConversationWithUniqueNames(
   d1: D1Database,
   conversationId: string,
   conversationCreatedAt: string,
+  conversationExpiresAt: string,
   memberA: string,
   memberB: string,
   ticketIds: [string, string],
@@ -89,8 +98,11 @@ async function createConversationWithUniqueNames(
     try {
       await d1.batch([
         d1
-          .prepare(`INSERT INTO conversations (id, status, created_at) VALUES (?, 'active', ?)`)
-          .bind(conversationId, conversationCreatedAt),
+          .prepare(
+            `INSERT INTO conversations (id, status, created_at, expires_at)
+             VALUES (?, 'active', ?, ?)`,
+          )
+          .bind(conversationId, conversationCreatedAt, conversationExpiresAt),
         d1
           .prepare("INSERT INTO active_anonymous_names (name, conversation_id) VALUES (?, ?)")
           .bind(nameA, conversationId),
@@ -145,7 +157,8 @@ async function ensureRealtimeSchema(d1: D1Database) {
       id TEXT PRIMARY KEY NOT NULL,
       status TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      ended_at TEXT
+      ended_at TEXT,
+      expires_at TEXT
     )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS conversation_members (
       conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -178,6 +191,28 @@ async function ensureRealtimeSchema(d1: D1Database) {
       "CREATE INDEX IF NOT EXISTS active_anonymous_names_conversation_idx ON active_anonymous_names (conversation_id)",
     ),
   ]);
+  await ensureConversationsExpiryColumn(d1);
+}
+
+// conversations predates expires_at, so existing deployments need it added
+// and backfilled from their fixed 20-minute window. Only runs the backfill
+// the one time the column is actually added -- see the equivalent fix in
+// db/index.ts for why an unconditional backfill on every request is wasteful.
+async function ensureConversationsExpiryColumn(d1: D1Database) {
+  const columns = await d1
+    .prepare("PRAGMA table_info(conversations)")
+    .all<{ name: string }>();
+  const hasExpiresAt = columns.results.some((column) => column.name === "expires_at");
+  if (hasExpiresAt) return;
+
+  await d1.prepare("ALTER TABLE conversations ADD COLUMN expires_at TEXT").run();
+  await d1
+    .prepare(
+      `UPDATE conversations
+       SET expires_at = datetime(created_at, '+20 minutes')
+       WHERE expires_at IS NULL`,
+    )
+    .run();
 }
 
 async function expireStaleRealtimeState(d1: D1Database) {
@@ -194,8 +229,12 @@ async function expireStaleRealtimeState(d1: D1Database) {
     d1.prepare(
       `UPDATE conversations
        SET status = 'ended', ended_at = CURRENT_TIMESTAMP
-       WHERE status = 'active' AND created_at < datetime('now', ?)`,
-    ).bind(CONVERSATION_LIFETIME),
+       WHERE status = 'active'
+         AND (
+           (expires_at IS NOT NULL AND expires_at <= datetime('now'))
+           OR (expires_at IS NULL AND created_at < datetime('now', ?))
+         )`,
+    ).bind(LEGACY_CONVERSATION_LIFETIME),
     d1.prepare(
       `UPDATE matchmaking_tickets
        SET status = 'expired', updated_at = CURRENT_TIMESTAMP
@@ -420,10 +459,14 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
 
     const conversationId = crypto.randomUUID();
     const conversationCreatedAt = new Date().toISOString();
+    const conversationExpiresAt = new Date(
+      Date.now() + CHAT_DURATION_SECONDS * 1000,
+    ).toISOString();
     await createConversationWithUniqueNames(
       this.env.DB,
       conversationId,
       conversationCreatedAt,
+      conversationExpiresAt,
       current.user_email,
       candidate.user_email,
       [current.id, candidate.id],
@@ -470,15 +513,34 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
 
     const member = await this.env.DB
       .prepare(
-        `SELECT cm.anonymous_name, c.status
+        `SELECT cm.anonymous_name, c.status, c.expires_at
          FROM conversation_members cm
          JOIN conversations c ON c.id = cm.conversation_id
          WHERE cm.conversation_id = ? AND cm.user_email = ? LIMIT 1`,
       )
       .bind(conversationId, email)
-      .first<{ anonymous_name: string; status: string }>();
+      .first<{ anonymous_name: string; status: string; expires_at: string | null }>();
     if (!member) return new Response("Conversation not found", { status: 404 });
-    if (member.status !== "active") return new Response("Conversation has ended", { status: 409 });
+
+    if (member.status !== "active") {
+      // A browser can't distinguish an HTTP-level rejection from a network
+      // blip, so a client reconnecting after the chat already ended (e.g. it
+      // was asleep when the alarm fired) would otherwise retry forever.
+      // Accept the socket just long enough to deliver the real "ended"
+      // event through the same channel the client already handles.
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      this.ctx.acceptWebSocket(server);
+      server.send(JSON.stringify({ type: "ended" }));
+      server.close(1000, "Conversation has ended");
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
+    const expiresAtMs = member.expires_at
+      ? parseSqliteTimestamp(member.expires_at)
+      : Date.now() + CHAT_DURATION_SECONDS * 1000;
+    await this.ctx.storage.put("conversationId", conversationId);
+    await this.ctx.storage.setAlarm(expiresAtMs);
 
     const history = await this.env.DB
       .prepare(
@@ -506,6 +568,7 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
     server.serializeAttachment(attachment);
     server.send(JSON.stringify({
       type: "ready",
+      expiresAt: expiresAtMs,
       history: history.results.map((message) => ({
         id: message.id,
         text: message.body,
@@ -544,6 +607,11 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
           .bind(attachment.conversationId),
       ]);
       this.broadcast({ type: "ended" });
+      return;
+    }
+
+    if (payload.type === "extend-request") {
+      await this.handleExtendRequest(attachment);
       return;
     }
 
@@ -595,6 +663,95 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
   webSocketError(socket: WebSocket) {
     socket.close(1011, "WebSocket error");
     this.broadcastPresence();
+  }
+
+  // Guaranteed by the Cloudflare runtime to fire at the scheduled time even
+  // if no one is connected (or this DO was evicted in the meantime), so the
+  // chat ends for both users at the same instant regardless of which of them
+  // is actually online -- unlike a client-side timer, this can't be paused
+  // by one participant's device sleeping.
+  async alarm() {
+    const conversationId = await this.ctx.storage.get<string>("conversationId");
+    if (!conversationId) return;
+
+    const conversation = await this.env.DB
+      .prepare("SELECT status, expires_at FROM conversations WHERE id = ? LIMIT 1")
+      .bind(conversationId)
+      .first<{ status: string; expires_at: string | null }>();
+    if (!conversation || conversation.status !== "active") return;
+
+    const expiresAtMs = conversation.expires_at
+      ? parseSqliteTimestamp(conversation.expires_at)
+      : 0;
+    if (expiresAtMs > Date.now()) {
+      // Expiry was pushed out (extended) after this alarm was scheduled.
+      await this.ctx.storage.setAlarm(expiresAtMs);
+      return;
+    }
+
+    await this.env.DB.batch([
+      this.env.DB
+        .prepare(
+          `UPDATE conversations SET status = 'ended', ended_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND status = 'active'`,
+        )
+        .bind(conversationId),
+      this.env.DB
+        .prepare("DELETE FROM active_anonymous_names WHERE conversation_id = ?")
+        .bind(conversationId),
+    ]);
+    this.broadcast({ type: "ended" });
+  }
+
+  // Extends the chat by another full window, but only once every current
+  // member has separately asked to -- silence (or running out the clock)
+  // means the chat simply ends on schedule.
+  private async handleExtendRequest(attachment: ConnectionAttachment) {
+    const members = await this.env.DB
+      .prepare("SELECT user_email FROM conversation_members WHERE conversation_id = ?")
+      .bind(attachment.conversationId)
+      .all<{ user_email: string }>();
+    const memberEmails = new Set(members.results.map((row) => row.user_email));
+    if (!memberEmails.has(attachment.email)) return;
+
+    const stored = (await this.ctx.storage.get<string[]>("extendRequests")) ?? [];
+    const requested = new Set(stored.filter((requesterEmail) => memberEmails.has(requesterEmail)));
+    requested.add(attachment.email);
+    await this.ctx.storage.put("extendRequests", [...requested]);
+
+    for (const peer of this.ctx.getWebSockets()) {
+      const peerAttachment = peer.deserializeAttachment() as ConnectionAttachment | null;
+      if (peer.readyState === WebSocket.OPEN && peerAttachment) {
+        peer.send(JSON.stringify({
+          type: "extend-requested",
+          mine: peerAttachment.email === attachment.email,
+        }));
+      }
+    }
+
+    const everyoneAgreed = memberEmails.size > 0
+      && [...memberEmails].every((memberEmail) => requested.has(memberEmail));
+    if (!everyoneAgreed) return;
+
+    const conversation = await this.env.DB
+      .prepare("SELECT status, expires_at FROM conversations WHERE id = ? LIMIT 1")
+      .bind(attachment.conversationId)
+      .first<{ status: string; expires_at: string | null }>();
+    if (!conversation || conversation.status !== "active") return;
+
+    const currentExpiresAtMs = conversation.expires_at
+      ? parseSqliteTimestamp(conversation.expires_at)
+      : Date.now();
+    const newExpiresAtMs = Math.max(currentExpiresAtMs, Date.now()) + CHAT_DURATION_SECONDS * 1000;
+    const newExpiresAtIso = new Date(newExpiresAtMs).toISOString();
+
+    await this.env.DB
+      .prepare("UPDATE conversations SET expires_at = ? WHERE id = ? AND status = 'active'")
+      .bind(newExpiresAtIso, attachment.conversationId)
+      .run();
+    await this.ctx.storage.delete("extendRequests");
+    await this.ctx.storage.setAlarm(newExpiresAtMs);
+    this.broadcast({ type: "extended", expiresAt: newExpiresAtMs });
   }
 
   private broadcast(payload: Record<string, unknown>) {
