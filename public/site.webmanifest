@@ -1,0 +1,9 @@
+{
+  "name": "myMoodly",
+  "short_name": "myMoodly",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F8F5",
+  "theme_color": "#0B443D",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

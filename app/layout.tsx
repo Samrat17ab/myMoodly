@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   description:
     "Private, anonymous, mood-based conversations with someone who gets where you are.",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+  manifest: "/site.webmanifest",
+  appleWebApp: {
+    title: "myMoodly",
+    capable: true,
+    statusBarStyle: "default",
+  },
   openGraph: {
     title: "myMoodly - Feel it. Share it. Let it move.",
     description: "Anonymous conversations for how you really feel.",
