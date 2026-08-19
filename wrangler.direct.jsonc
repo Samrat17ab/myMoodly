@@ -8,7 +8,7 @@
   "preview_urls": false,
   "no_bundle": true,
   "vars": {
-    "SMTP_USERNAME": "lamsalsamrat831@gmail.com",
+    "SMTP_USERNAME": "mymoodly.space@gmail.com",
     "PUBLIC_APP_URL": "https://mymoodly.space"
   },
   "rules": [
