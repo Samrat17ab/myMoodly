@@ -9,7 +9,7 @@
   "no_bundle": true,
   "vars": {
     "SMTP_USERNAME": "lamsalsamrat831@gmail.com",
-    "PUBLIC_APP_URL": "https://mymoodly.samratlamsal24.com.np"
+    "PUBLIC_APP_URL": "https://mymoodly.space"
   },
   "rules": [
     {
