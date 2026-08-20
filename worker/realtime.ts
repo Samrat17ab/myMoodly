@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AccessAuthEnv } from "./access-auth";
-import { NICKNAME_ADJECTIVES, NICKNAME_ANIMALS } from "./nickname";
+import { ensureNickname } from "./nickname";
 
 export interface RealtimeEnv extends AccessAuthEnv {
   DB: D1Database;
@@ -42,24 +42,11 @@ function parseSqliteTimestamp(value: string): number {
   return Date.parse(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
 }
 
-// Attempt 0 yields a plain "Adjective Animal" name (~1,600 combinations).
-// Later attempts append a random number for a far larger space, so retries
-// after a name collision converge quickly even under heavy concurrent load.
-function anonymousName(attempt = 0) {
-  const bytes = new Uint8Array(4);
-  crypto.getRandomValues(bytes);
-  const base = `${NICKNAME_ADJECTIVES[bytes[0] % NICKNAME_ADJECTIVES.length]} ${NICKNAME_ANIMALS[bytes[1] % NICKNAME_ANIMALS.length]}`;
-  if (attempt <= 0) return base;
-  const suffix = 1 + (((bytes[2] << 8) | bytes[3]) % 9999);
-  return `${base} ${suffix}`;
-}
-
-// Reserves two globally-unique-among-active-conversations anonymous names and
-// creates the conversation, its members, and the matched tickets atomically.
-// Uniqueness is enforced by the database (a PRIMARY KEY on
-// active_anonymous_names.name), not just by picking from a large word list,
-// so it holds even if two matches are created concurrently.
-async function createConversationWithUniqueNames(
+// A user's anonymous name to conversation partners is their own profile
+// nickname (worker/nickname.ts), so what a partner sees always matches what
+// that user sees for themselves in Settings, and only changes when their
+// nickname rotates (every 24h) rather than per conversation.
+async function createConversationWithMemberNicknames(
   d1: D1Database,
   conversationId: string,
   conversationCreatedAt: string,
@@ -68,60 +55,47 @@ async function createConversationWithUniqueNames(
   memberB: string,
   ticketIds: [string, string],
 ) {
-  const MAX_ATTEMPTS = 12;
-  let lastError: unknown;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const forceUnique = attempt === MAX_ATTEMPTS - 1;
-    const nameA = forceUnique
-      ? `${anonymousName()} ${crypto.randomUUID().slice(0, 8)}`
-      : anonymousName(attempt);
-    let nameB = forceUnique
-      ? `${anonymousName()} ${crypto.randomUUID().slice(0, 8)}`
-      : anonymousName(attempt);
-    if (nameB === nameA) nameB = `${nameB} ${crypto.randomUUID().slice(0, 4)}`;
+  const profileRows = await d1
+    .prepare(
+      "SELECT email, nickname, nickname_assigned_at FROM profiles WHERE email IN (?, ?)",
+    )
+    .bind(memberA, memberB)
+    .all<{ email: string; nickname: string | null; nickname_assigned_at: number | null }>();
+  const profileByEmail = new Map(
+    profileRows.results.map((row) => [row.email, row]),
+  );
+  const [nameA, nameB] = await Promise.all([
+    ensureNickname(d1, memberA, profileByEmail.get(memberA) ?? null),
+    ensureNickname(d1, memberB, profileByEmail.get(memberB) ?? null),
+  ]);
 
-    try {
-      await d1.batch([
-        d1
-          .prepare(
-            `INSERT INTO conversations (id, status, created_at, expires_at)
-             VALUES (?, 'active', ?, ?)`,
-          )
-          .bind(conversationId, conversationCreatedAt, conversationExpiresAt),
-        d1
-          .prepare("INSERT INTO active_anonymous_names (name, conversation_id) VALUES (?, ?)")
-          .bind(nameA, conversationId),
-        d1
-          .prepare("INSERT INTO active_anonymous_names (name, conversation_id) VALUES (?, ?)")
-          .bind(nameB, conversationId),
-        d1
-          .prepare(
-            `INSERT INTO conversation_members
-              (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
-          )
-          .bind(conversationId, memberA, nameA),
-        d1
-          .prepare(
-            `INSERT INTO conversation_members
-              (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
-          )
-          .bind(conversationId, memberB, nameB),
-        d1
-          .prepare(
-            `UPDATE matchmaking_tickets
-             SET status = 'matched', conversation_id = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE id IN (?, ?) AND status = 'waiting'`,
-          )
-          .bind(conversationId, ticketIds[0], ticketIds[1]),
-      ]);
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Could not allocate unique anonymous names.");
+  await d1.batch([
+    d1
+      .prepare(
+        `INSERT INTO conversations (id, status, created_at, expires_at)
+         VALUES (?, 'active', ?, ?)`,
+      )
+      .bind(conversationId, conversationCreatedAt, conversationExpiresAt),
+    d1
+      .prepare(
+        `INSERT INTO conversation_members
+          (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
+      )
+      .bind(conversationId, memberA, nameA),
+    d1
+      .prepare(
+        `INSERT INTO conversation_members
+          (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
+      )
+      .bind(conversationId, memberB, nameB),
+    d1
+      .prepare(
+        `UPDATE matchmaking_tickets
+         SET status = 'matched', conversation_id = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id IN (?, ?) AND status = 'waiting'`,
+      )
+      .bind(conversationId, ticketIds[0], ticketIds[1]),
+  ]);
 }
 
 async function ensureRealtimeSchema(d1: D1Database) {
@@ -159,10 +133,6 @@ async function ensureRealtimeSchema(d1: D1Database) {
       body TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`),
-    d1.prepare(`CREATE TABLE IF NOT EXISTS active_anonymous_names (
-      name TEXT PRIMARY KEY NOT NULL,
-      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE
-    )`),
     d1.prepare(
       "CREATE INDEX IF NOT EXISTS matchmaking_tickets_status_created_idx ON matchmaking_tickets (status, created_at)",
     ),
@@ -171,9 +141,6 @@ async function ensureRealtimeSchema(d1: D1Database) {
     ),
     d1.prepare(
       "CREATE INDEX IF NOT EXISTS conversation_messages_room_created_idx ON conversation_messages (conversation_id, created_at)",
-    ),
-    d1.prepare(
-      "CREATE INDEX IF NOT EXISTS active_anonymous_names_conversation_idx ON active_anonymous_names (conversation_id)",
     ),
   ]);
   await ensureConversationsExpiryColumn(d1);
@@ -227,12 +194,6 @@ async function expireStaleRealtimeState(d1: D1Database) {
          AND conversation_id IN (
            SELECT id FROM conversations WHERE status <> 'active'
          )`,
-    ),
-    d1.prepare(
-      `DELETE FROM active_anonymous_names
-       WHERE conversation_id IN (
-         SELECT id FROM conversations WHERE status <> 'active'
-       )`,
     ),
   ]);
 }
@@ -447,7 +408,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
     const conversationExpiresAt = new Date(
       Date.now() + CHAT_DURATION_SECONDS * 1000,
     ).toISOString();
-    await createConversationWithUniqueNames(
+    await createConversationWithMemberNicknames(
       this.env.DB,
       conversationId,
       conversationCreatedAt,
@@ -580,17 +541,13 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
     }
 
     if (payload.type === "end") {
-      await this.env.DB.batch([
-        this.env.DB
-          .prepare(
-            `UPDATE conversations SET status = 'ended', ended_at = CURRENT_TIMESTAMP
-             WHERE id = ? AND status = 'active'`,
-          )
-          .bind(attachment.conversationId),
-        this.env.DB
-          .prepare("DELETE FROM active_anonymous_names WHERE conversation_id = ?")
-          .bind(attachment.conversationId),
-      ]);
+      await this.env.DB
+        .prepare(
+          `UPDATE conversations SET status = 'ended', ended_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND status = 'active'`,
+        )
+        .bind(attachment.conversationId)
+        .run();
       this.broadcast({ type: "ended" });
       return;
     }
@@ -674,17 +631,13 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
       return;
     }
 
-    await this.env.DB.batch([
-      this.env.DB
-        .prepare(
-          `UPDATE conversations SET status = 'ended', ended_at = CURRENT_TIMESTAMP
-           WHERE id = ? AND status = 'active'`,
-        )
-        .bind(conversationId),
-      this.env.DB
-        .prepare("DELETE FROM active_anonymous_names WHERE conversation_id = ?")
-        .bind(conversationId),
-    ]);
+    await this.env.DB
+      .prepare(
+        `UPDATE conversations SET status = 'ended', ended_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status = 'active'`,
+      )
+      .bind(conversationId)
+      .run();
     this.broadcast({ type: "ended" });
   }
 

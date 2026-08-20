@@ -706,7 +706,7 @@ function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,on
     <p>These details are never visible to conversation partners.</p>
     <div className="settings-card">
       <span className="avatar large-avatar">{initialsFor(nickname, email)}</span>
-      <div><b>Signed in as</b><p>{email}</p><p>Your current nickname is <b>{nickname || "…"}</b> · refreshes every 24 hours</p></div>
+      <div><b>Signed in as</b><p>{email}</p><p>Conversation partners see you as <b>{nickname || "…"}</b> · changes every 24 hours</p></div>
     </div>
     <div className="settings-card">
       <span className="avatar large-avatar">◔</span>
