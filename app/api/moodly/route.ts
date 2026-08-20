@@ -5,6 +5,7 @@ import {
   type AccessAuthEnv,
 } from "@/worker/access-auth";
 import { clearSessionCookie } from "@/worker/magic-auth";
+import { ensureNickname } from "@/worker/nickname";
 
 type ProfilePayload = {
   age?: string | number;
@@ -37,7 +38,8 @@ export async function GET(request: Request) {
     const d1 = getD1();
     const [profileResult, usageResult] = await d1.batch([
       d1.prepare(
-        `SELECT email, age, gender, custom_gender, country, languages, terms_accepted
+        `SELECT email, age, gender, custom_gender, country, languages, terms_accepted,
+                nickname, nickname_assigned_at
          FROM profiles WHERE email = ? LIMIT 1`,
       ).bind(email),
       d1.prepare(
@@ -55,9 +57,13 @@ export async function GET(request: Request) {
           country: string;
           languages: string;
           terms_accepted: number;
+          nickname: string | null;
+          nickname_assigned_at: number | null;
         }
       | undefined;
     const usageRow = usageResult.results[0] as { count?: number } | undefined;
+
+    const nickname = row ? await ensureNickname(d1, email, row) : null;
 
     return Response.json({
       profile: row
@@ -70,6 +76,7 @@ export async function GET(request: Request) {
             terms: Boolean(row.terms_accepted),
           }
         : null,
+      nickname,
       usage: Number(usageRow?.count ?? 0),
     });
   } catch (error) {
@@ -133,7 +140,15 @@ export async function POST(request: Request) {
         )
         .run();
 
-      return Response.json({ saved: true });
+      const nicknameRow = await d1
+        .prepare(
+          "SELECT nickname, nickname_assigned_at FROM profiles WHERE email = ?",
+        )
+        .bind(email)
+        .first<{ nickname: string | null; nickname_assigned_at: number | null }>();
+      const nickname = await ensureNickname(d1, email, nicknameRow ?? null);
+
+      return Response.json({ saved: true, nickname });
     }
 
     if (type === "check-in") {

@@ -126,6 +126,30 @@ async function ensureConversationSurveyColumns(d1: D1Database) {
   }
 }
 
+// profiles predates the nickname columns, so existing rows need them added
+// rather than just created fresh.
+async function ensureProfileNicknameColumns(d1: D1Database) {
+  const columns = await d1
+    .prepare("PRAGMA table_info(profiles)")
+    .all<{ name: string }>();
+  const existing = new Set(columns.results.map((column) => column.name));
+
+  const missing = (
+    [
+      ["nickname", "TEXT"],
+      ["nickname_assigned_at", "INTEGER"],
+    ] as const
+  ).filter(([name]) => !existing.has(name));
+
+  if (missing.length > 0) {
+    await d1.batch(
+      missing.map(([name, type]) =>
+        d1.prepare(`ALTER TABLE profiles ADD COLUMN ${name} ${type}`),
+      ),
+    );
+  }
+}
+
 export function ensureDbSchema() {
   schemaReady ??= (async () => {
     const d1 = getD1();
@@ -267,6 +291,7 @@ export function ensureDbSchema() {
       ),
     ]);
     await ensureConversationSurveyColumns(d1);
+    await ensureProfileNicknameColumns(d1);
   })().catch((error) => {
     schemaReady = null;
     throw error;

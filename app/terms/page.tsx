@@ -14,7 +14,7 @@ export default function TermsAndConditions() {
     <main className="legal-page">
       <header className="legal-header">
         <Link className="brand legal-brand" href="/" aria-label="myMoodly home">
-          <span>m</span>
+          <span><img src="/logo-mark.svg" alt="" width={22} height={22}/></span>
           <b>myMoodly</b>
         </Link>
         <Link className="legal-home-link" href="/">

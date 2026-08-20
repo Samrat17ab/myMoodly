@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AccessAuthEnv } from "./access-auth";
+import { NICKNAME_ADJECTIVES, NICKNAME_ANIMALS } from "./nickname";
 
 export interface RealtimeEnv extends AccessAuthEnv {
   DB: D1Database;
@@ -41,29 +42,13 @@ function parseSqliteTimestamp(value: string): number {
   return Date.parse(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
 }
 
-const adjectives = [
-  "Gentle", "Quiet", "Kind", "Warm", "Brave", "Calm", "Bright", "Patient",
-  "Soft", "Steady", "Humble", "Cheerful", "Hopeful", "Curious", "Thoughtful",
-  "Sincere", "Tender", "Serene", "Radiant", "Playful", "Graceful", "Loyal",
-  "Wise", "Nimble", "Breezy", "Cozy", "Earnest", "Mellow", "Sunny", "Dreamy",
-  "Quirky", "Gallant", "Jolly", "Lively", "Mindful", "Peaceful", "Spirited",
-  "Trusty", "Vivid", "Whimsical",
-];
-const animals = [
-  "Otter", "Sparrow", "Panda", "Fox", "Koala", "Robin", "Dolphin", "Deer",
-  "Owl", "Hedgehog", "Rabbit", "Heron", "Badger", "Finch", "Seal", "Lynx",
-  "Falcon", "Wren", "Beaver", "Swan", "Turtle", "Squirrel", "Raven", "Moose",
-  "Puffin", "Gazelle", "Panther", "Lemur", "Egret", "Marten", "Ibis", "Vole",
-  "Stag", "Crane", "Kite", "Newt", "Mink", "Tern", "Whale", "Bison",
-];
-
 // Attempt 0 yields a plain "Adjective Animal" name (~1,600 combinations).
 // Later attempts append a random number for a far larger space, so retries
 // after a name collision converge quickly even under heavy concurrent load.
 function anonymousName(attempt = 0) {
   const bytes = new Uint8Array(4);
   crypto.getRandomValues(bytes);
-  const base = `${adjectives[bytes[0] % adjectives.length]} ${animals[bytes[1] % animals.length]}`;
+  const base = `${NICKNAME_ADJECTIVES[bytes[0] % NICKNAME_ADJECTIVES.length]} ${NICKNAME_ANIMALS[bytes[1] % NICKNAME_ANIMALS.length]}`;
   if (attempt <= 0) return base;
   const suffix = 1 + (((bytes[2] << 8) | bytes[3]) % 9999);
   return `${base} ${suffix}`;
