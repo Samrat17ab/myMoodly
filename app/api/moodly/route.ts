@@ -244,7 +244,14 @@ export async function POST(request: Request) {
         typeof payload.understood === "string" ? payload.understood : "";
       const moodChange =
         typeof payload.moodChange === "string" ? payload.moodChange : "";
-      if (!checkInId || !understood || !moodChange) {
+      const partnerRating =
+        typeof payload.partnerRating === "string" ? payload.partnerRating : "";
+      if (
+        !checkInId ||
+        !understood ||
+        !moodChange ||
+        !["Great", "Okay", "Not for me"].includes(partnerRating)
+      ) {
         return jsonError("Complete survey answers are required");
       }
 
@@ -257,7 +264,8 @@ export async function POST(request: Request) {
             .bind(checkInId, email),
           d1
             .prepare(
-              `SELECT other_ci.quadrant AS quadrant, other_ci.emotion AS emotion
+              `SELECT other_ci.quadrant AS quadrant, other_ci.emotion AS emotion,
+                      other_mt.user_email AS partner_email
                FROM matchmaking_tickets mt
                JOIN matchmaking_tickets other_mt
                  ON other_mt.conversation_id = mt.conversation_id
@@ -290,7 +298,7 @@ export async function POST(request: Request) {
         | undefined;
       if (!ownCheckIn) return jsonError("Check-in not found", 404);
       const partnerCheckIn = partnerCheckInResult.results[0] as
-        | { quadrant: string; emotion: string }
+        | { quadrant: string; emotion: string; partner_email: string | null }
         | undefined;
       const profile = profileResult.results[0] as
         | { age: number; gender: string }
@@ -303,8 +311,8 @@ export async function POST(request: Request) {
           `INSERT INTO conversation_surveys
             (id, check_in_id, user_email, understood, mood_change,
              mood_quadrant, mood_emotion, matched_mood_quadrant, matched_mood_emotion,
-             age, gender, chat_session_seconds)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             age, gender, chat_session_seconds, partner_rating)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -319,8 +327,20 @@ export async function POST(request: Request) {
           profile?.age ?? null,
           profile?.gender ?? null,
           session?.seconds ?? null,
+          partnerRating,
         )
         .run();
+
+      // A low rating is a low-stakes "we just weren't a fit" signal, not a
+      // report -- so it quietly excludes this pairing from future matches
+      // (same mechanism as an explicit block) without accusing anyone of
+      // anything or notifying either side.
+      if (partnerRating === "Not for me" && partnerCheckIn?.partner_email) {
+        await d1
+          .prepare("INSERT OR IGNORE INTO blocks (blocker_email, blocked_email) VALUES (?, ?)")
+          .bind(email, partnerCheckIn.partner_email)
+          .run();
+      }
 
       return Response.json({ id }, { status: 201 });
     }

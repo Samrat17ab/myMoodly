@@ -127,7 +127,7 @@ export default function MoodlyApp() {
   const [reportDone, setReportDone] = useState(false);
   const [reportSending, setReportSending] = useState(false);
   const [toast, setToast] = useState("");
-  const [survey, setSurvey] = useState({ understood:"", change:"" });
+  const [survey, setSurvey] = useState({ understood:"", change:"", partnerRating:"" });
   const [checkInId, setCheckInId] = useState("");
   const [ticketId, setTicketId] = useState("");
   const [conversationId, setConversationId] = useState("");
@@ -539,11 +539,13 @@ export default function MoodlyApp() {
     setExtendRequestedByMe(true);
   };
   const submitSurvey = async () => {
-    if (!survey.understood || !survey.change) return setToast("Please answer both questions.");
+    if (!survey.understood || !survey.change || !survey.partnerRating) {
+      return setToast("Please answer all three questions.");
+    }
     try {
       await saveMoodlyData({
         type:"survey", email, checkInId,
-        understood:survey.understood, moodChange:survey.change,
+        understood:survey.understood, moodChange:survey.change, partnerRating:survey.partnerRating,
       });
       setToast("Thanks — your response was saved.");
       navigate("home");
@@ -708,6 +710,7 @@ export default function MoodlyApp() {
         <div className="survey-art">⌁</div><span className="overline">CONVERSATION COMPLETE</span><h2>How did that feel?</h2><p>Your answer helps us make future matches better.</p>
         <SurveyQuestion label="Did you feel understood in this conversation?" options={["Yes","Somewhat","No"]} value={survey.understood} onChange={v => setSurvey({...survey,understood:v})}/>
         <SurveyQuestion label="How do you feel compared to before?" options={["Better","Same","Worse"]} value={survey.change} onChange={v => setSurvey({...survey,change:v})}/>
+        <SurveyQuestion label="How was this match?" options={["Great","Okay","Not for me"]} value={survey.partnerRating} onChange={v => setSurvey({...survey,partnerRating:v})}/>
         <button className="primary wide" onClick={() => void submitSurvey()}>Submit response</button>
         <button className="text-button skip" onClick={() => navigate("home")}>Skip for now</button>
       </section>}
@@ -771,7 +774,7 @@ function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,on
       <button className="text-button skip danger" disabled={busy} onClick={()=>setConfirmDelete(true)}>Delete account &amp; data</button>
     </div>
     {confirmDelete&&<Modal title="Delete your account?" onClose={()=>setConfirmDelete(false)}>
-      <p className="modal-copy">This permanently deletes your profile, mood check-ins, and conversation history. This can&apos;t be undone.</p>
+      <p className="modal-copy">This permanently deletes your profile, mood check-ins, and conversation history. This can&apos;t be undone. Any feedback you&apos;ve sent us or reports tied to your account are kept as safety records, as described in our <Link href="/privacy">Privacy Policy</Link>.</p>
       <button className="primary wide danger-solid" disabled={busy} onClick={()=>{setConfirmDelete(false);onDeleteAccount();}}>{busy?"Deleting…":"Yes, delete everything"}</button>
       <button className="text-button skip" disabled={busy} onClick={()=>setConfirmDelete(false)}>Cancel</button>
     </Modal>}
