@@ -18,6 +18,8 @@ type Overview = {
   totalDeletedAccounts: number;
   avgSessionSeconds: number | null;
   ratingBreakdown: Record<string, number>;
+  understoodBreakdown: Record<string, number>;
+  moodChangeBreakdown: Record<string, number>;
   usersAtFreeCapToday: number;
 };
 type ReportRow = {
@@ -164,23 +166,9 @@ export default function AdminPanel() {
           <StatCard label="Active blocks" value={overview.totalBlocks} />
           <StatCard label="Feedback received" value={overview.totalFeedback} />
           <StatCard label="Accounts deleted (all-time)" value={overview.totalDeletedAccounts} />
-          <div className="admin-card admin-ratings">
-            <span>Match quality ratings</span>
-            <div className="admin-rating-bars">
-              {(["Great", "Okay", "Not for me"] as const).map((key) => {
-                const total = overview.ratingBreakdown.Great + overview.ratingBreakdown.Okay + overview.ratingBreakdown["Not for me"];
-                const count = overview.ratingBreakdown[key] ?? 0;
-                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-                return (
-                  <div key={key} className="admin-rating-row">
-                    <small>{key}</small>
-                    <div className="admin-bar-track"><div className="admin-bar-fill" style={{ width: `${pct}%` }} /></div>
-                    <b>{count}</b>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <RatingCard label="Felt understood in the conversation" breakdown={overview.understoodBreakdown} options={["Yes", "Somewhat", "No"]} />
+          <RatingCard label="How they felt compared to before" breakdown={overview.moodChangeBreakdown} options={["Better", "Same", "Worse"]} />
+          <RatingCard label="Match quality" breakdown={overview.ratingBreakdown} options={["Great", "Okay", "Not for me"]} />
         </section>
       )}
 
@@ -277,4 +265,26 @@ export default function AdminPanel() {
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return <div className="admin-card"><span>{label}</span><b>{value}</b></div>;
+}
+
+function RatingCard({ label, breakdown, options }: { label: string; breakdown: Record<string, number>; options: readonly string[] }) {
+  const total = options.reduce((sum, key) => sum + (breakdown[key] ?? 0), 0);
+  return (
+    <div className="admin-card admin-ratings">
+      <span>{label}</span>
+      <div className="admin-rating-bars">
+        {options.map((key) => {
+          const count = breakdown[key] ?? 0;
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          return (
+            <div key={key} className="admin-rating-row">
+              <small>{key}</small>
+              <div className="admin-bar-track"><div className="admin-bar-fill" style={{ width: `${pct}%` }} /></div>
+              <b>{count}</b>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

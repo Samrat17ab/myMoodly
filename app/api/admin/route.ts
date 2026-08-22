@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         totalUsers, newToday, newThisWeek,
         checkInsToday, matchesToday, matchesThisWeek, activeNow,
         totalReports, totalBans, totalBlocks, totalFeedback, totalDeleted,
-        avgSession, ratingRows, capHits,
+        avgSession, ratingRows, understoodRows, moodChangeRows, capHits,
       ] = await d1.batch([
         d1.prepare("SELECT COUNT(*) AS n FROM profiles"),
         d1.prepare("SELECT COUNT(*) AS n FROM profiles WHERE created_at >= datetime('now', 'start of day')"),
@@ -51,6 +51,8 @@ export async function GET(request: Request) {
         d1.prepare("SELECT COUNT(*) AS n FROM deleted_accounts"),
         d1.prepare("SELECT AVG(chat_session_seconds) AS avg_seconds FROM conversation_surveys WHERE chat_session_seconds IS NOT NULL"),
         d1.prepare("SELECT partner_rating, COUNT(*) AS n FROM conversation_surveys WHERE partner_rating IS NOT NULL GROUP BY partner_rating"),
+        d1.prepare("SELECT understood, COUNT(*) AS n FROM conversation_surveys WHERE understood IS NOT NULL AND understood != '' GROUP BY understood"),
+        d1.prepare("SELECT mood_change, COUNT(*) AS n FROM conversation_surveys WHERE mood_change IS NOT NULL AND mood_change != '' GROUP BY mood_change"),
         d1.prepare(
           `SELECT COUNT(*) AS n FROM (
              SELECT user_email FROM check_ins
@@ -63,6 +65,14 @@ export async function GET(request: Request) {
       const ratings: Record<string, number> = { Great: 0, Okay: 0, "Not for me": 0 };
       for (const row of ratingRows.results as { partner_rating: string; n: number }[]) {
         ratings[row.partner_rating] = row.n;
+      }
+      const understood: Record<string, number> = { Yes: 0, Somewhat: 0, No: 0 };
+      for (const row of understoodRows.results as { understood: string; n: number }[]) {
+        understood[row.understood] = row.n;
+      }
+      const moodChange: Record<string, number> = { Better: 0, Same: 0, Worse: 0 };
+      for (const row of moodChangeRows.results as { mood_change: string; n: number }[]) {
+        moodChange[row.mood_change] = row.n;
       }
 
       return Response.json({
@@ -80,6 +90,8 @@ export async function GET(request: Request) {
         totalDeletedAccounts: (totalDeleted.results[0] as { n: number }).n,
         avgSessionSeconds: (avgSession.results[0] as { avg_seconds: number | null }).avg_seconds,
         ratingBreakdown: ratings,
+        understoodBreakdown: understood,
+        moodChangeBreakdown: moodChange,
         usersAtFreeCapToday: (capHits.results[0] as { n: number }).n,
       });
     }
