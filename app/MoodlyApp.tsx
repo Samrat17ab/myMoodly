@@ -115,6 +115,7 @@ export default function MoodlyApp() {
   const [otpSent, setOtpSent] = useState(false);
   const [authSending, setAuthSending] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
+  const [feedbackSending, setFeedbackSending] = useState(false);
   const [chatSeconds, setChatSeconds] = useState(1200);
   const [chatExpiresAt, setChatExpiresAt] = useState<number | null>(null);
   const [extendRequestedByMe, setExtendRequestedByMe] = useState(false);
@@ -124,6 +125,7 @@ export default function MoodlyApp() {
   const [menu, setMenu] = useState(false);
   const [report, setReport] = useState(false);
   const [reportDone, setReportDone] = useState(false);
+  const [reportSending, setReportSending] = useState(false);
   const [toast, setToast] = useState("");
   const [survey, setSurvey] = useState({ understood:"", change:"" });
   const [checkInId, setCheckInId] = useState("");
@@ -429,6 +431,19 @@ export default function MoodlyApp() {
       setToast(error instanceof Error ? error.message : "Could not save your profile.");
     }
   };
+  const submitFeedback = async (body: string, afterSend: () => void) => {
+    if (feedbackSending) return;
+    setFeedbackSending(true);
+    try {
+      await saveMoodlyData({ type:"feedback", body });
+      setToast("Thanks — your feedback was sent to the myMoodly team.");
+      afterSend();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not send your feedback.");
+    } finally {
+      setFeedbackSending(false);
+    }
+  };
   const signOut = async () => {
     if (accountBusy) return;
     setAccountBusy(true);
@@ -543,6 +558,28 @@ export default function MoodlyApp() {
     setMenu(false);
     navigate("survey");
   };
+  const submitReport = async (reason: string) => {
+    if (reportSending) return;
+    setReportSending(true);
+    try {
+      await saveMoodlyData({ type:"report", conversationId, reason });
+      setReportDone(true);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not submit your report.");
+    } finally {
+      setReportSending(false);
+    }
+  };
+  const submitBlock = async () => {
+    try {
+      await saveMoodlyData({ type:"block", conversationId });
+      setToast(`${partnerName} has been blocked.`);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not block this person.");
+    } finally {
+      endChat();
+    }
+  };
   const fmt = (s:number) => `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
   const partnerInitials = partnerName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
   const messageTime = (value:string) => {
@@ -654,7 +691,7 @@ export default function MoodlyApp() {
         <button className="text-button cancel" onClick={() => void cancelQueue()}>Cancel search</button>
       </section>}
       {view === "chat" && <section className="chat-view">
-        <header className="chat-header"><Brand/><div className="partner"><span className="avatar">{partnerInitials}</span><div><b>{partnerName}</b><small><i/> {onlineCount >= 2 ? "Here with you" : socketStatus === "live" ? "Connected" : "Reconnecting…"}</small></div></div><div className="chat-actions"><div className="timer">◷ {fmt(chatSeconds)}</div><button onClick={() => setMenu(!menu)}>•••</button>{menu && <div className="chat-menu"><button onClick={() => setReport(true)}>⚑ Report conversation</button><button onClick={() => { setToast(`${partnerName} has been blocked.`); endChat(); }}>⊘ Block this person</button><button onClick={endChat}>↗ End conversation</button></div>}</div></header>
+        <header className="chat-header"><Brand/><div className="partner"><span className="avatar">{partnerInitials}</span><div><b>{partnerName}</b><small><i/> {onlineCount >= 2 ? "Here with you" : socketStatus === "live" ? "Connected" : "Reconnecting…"}</small></div></div><div className="chat-actions"><div className="timer">◷ {fmt(chatSeconds)}</div><button onClick={() => setMenu(!menu)}>•••</button>{menu && <div className="chat-menu"><button onClick={() => setReport(true)}>⚑ Report conversation</button><button onClick={() => void submitBlock()}>⊘ Block this person</button><button onClick={endChat}>↗ End conversation</button></div>}</div></header>
         {chatSeconds > 0 && chatSeconds <= 60 && <div className="extend-banner">
           {extendRequestedByMe && extendRequestedByPartner ? <span>Extending your conversation…</span>
             : extendRequestedByMe ? <span>Waiting for {partnerName} to agree to keep chatting…</span>
@@ -665,7 +702,7 @@ export default function MoodlyApp() {
         <div className="messages"><div className="system-note">You're both anonymous. Messages are delivered live and saved securely for this conversation.</div>{messages.map(m => <div key={m.id} className={`bubble-row ${m.mine?"mine":""}`}><div className="bubble">{m.text}<time>{messageTime(m.time)}</time></div></div>)}</div>
         <div className="composer"><button aria-label="Conversation guidance">＋</button><input value={message} onChange={e => setMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Say what's on your mind…"/><button className="send" onClick={send}>↑</button></div>
         <footer className="chat-footer"><button onClick={() => openOverlay("resources")}>♡ Need help now?</button><span>{socketStatus === "live" ? "Live · Messages saved to this conversation" : "Reconnecting securely…"}</span></footer>
-        {report && <Modal title={reportDone ? "Report received":"Report conversation"} onClose={() => { setReport(false); setReportDone(false); }}>{reportDone ? <><p>Thank you. The conversation has ended and our safety team will review your report.</p><button className="primary wide" onClick={() => { setReport(false); endChat(); }}>Continue</button></>:<><p className="modal-copy">What happened? Your report is private and reviewed by a person.</p><div className="report-list">{["Harassment or bullying","Sexual content","Hate or discrimination","Sharing personal information","Something else"].map(x => <button key={x} onClick={() => setReportDone(true)}>{x}<span>→</span></button>)}</div></>}</Modal>}
+        {report && <Modal title={reportDone ? "Report received":"Report conversation"} onClose={() => { if (!reportSending) { setReport(false); setReportDone(false); } }}>{reportDone ? <><p>Thank you. Your report was recorded and this person won't be matched with you again.</p><button className="primary wide" onClick={() => { setReport(false); setReportDone(false); endChat(); }}>Continue</button></>:<><p className="modal-copy">What happened? Your report is private and recorded against this person's account.</p><div className="report-list">{["Harassment or bullying","Sexual content","Hate or discrimination","Sharing personal information","Something else"].map(x => <button key={x} disabled={reportSending} onClick={() => void submitReport(x)}>{x}<span>→</span></button>)}</div></>}</Modal>}
       </section>}
       {view === "survey" && <section className="panel compact-panel survey-panel">
         <div className="survey-art">⌁</div><span className="overline">CONVERSATION COMPLETE</span><h2>How did that feel?</h2><p>Your answer helps us make future matches better.</p>
@@ -677,7 +714,7 @@ export default function MoodlyApp() {
       {view === "paywall" && <Paywall onBack={() => navigate("home")} onUpgrade={() => setToast("Secure subscription checkout is ready for your payment provider.")}/>}
       {view === "resources" && <Resources country={profile.country} onBack={goBack}/>}
       {view === "guide" && <Guide onBack={goBack}/>}
-      {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} nickname={nickname} usage={usage} busy={accountBusy} onBack={goBack} onSave={() => void saveProfile(goBack)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()}/>}
+      {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} nickname={nickname} usage={usage} busy={accountBusy} onBack={goBack} onSave={() => void saveProfile(goBack)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()} feedbackSending={feedbackSending} onSendFeedback={(body, afterSend) => void submitFeedback(body, afterSend)}/>}
       {toast && <div className="toast">{toast}</div>}
     </main>
   );
@@ -696,8 +733,9 @@ function Modal({title,onClose,children}:{title:string,onClose:()=>void,children:
 function Resources({country,onBack}:{country:string,onBack:()=>void}){ return <section className="resource-view"><button className="back" onClick={onBack}>←</button><div className="resource-head"><span>♡</span><div><small>IMMEDIATE SUPPORT</small><h1>Need help right now?</h1><p>myMoodly isn't a crisis service, but you don't have to face this moment alone.</p></div></div><div className="resource-layout"><div><h3>Emergency contacts for {country}</h3>{country==="Nepal"?<><ResourceCard title="National Suicide Prevention Helpline" number="1166" note="Free, nationwide support"/><ResourceCard title="Police emergency" number="100" note="For immediate danger"/><ResourceCard title="Ambulance" number="102" note="Emergency medical support"/></>:<><ResourceCard title="Local emergency services" number="112 / 911" note="Use the number available in your country"/><ResourceCard title="Find a crisis centre" number="findahelpline.com" note="Verified helplines in 175+ countries"/></>}<p className="resource-foot">If a number doesn't connect, call your local emergency service or go to the nearest emergency department.</p></div><aside><h3>While you reach out</h3><p>Move to a place where other people are nearby.</p><p>Put distance between you and anything you could use to hurt yourself.</p><p>Text or call someone you trust and say: “I need you with me right now.”</p></aside></div></section>; }
 function ResourceCard({title,number,note}:{title:string,number:string,note:string}){ return <div className="resource-card"><span>☎</span><div><b>{title}</b><small>{note}</small></div><a href={number.match(/^\d/) ? `tel:${number.replace(/\D/g,"")}`:`https://${number}`}>{number}</a></div>; }
 function Guide({onBack}:{onBack:()=>void}){ const items=[["01","Name what you feel","Two quick questions guide you to one of 100 precise emotion words."],["02","Choose your intention","Talk with someone who feels similar, or someone in a different headspace."],["03","Meet anonymously","You're matched by mood and shared language — never by country, age, or gender."],["04","Talk for 20 minutes","A quiet timer keeps things contained. Continue only when you both agree."],["05","Stay in control","Report or block at any time. Emergency resources are always one tap away."]]; return <section className="guide-view"><button className="back" onClick={onBack}>←</button><span className="overline">HOW MYMOODLY WORKS</span><h1>A small check-in.<br/>A real human moment.</h1><div className="guide-grid">{items.map(x=><div key={x[0]}><i>{x[0]}</i><b>{x[1]}</b><p>{x[2]}</p></div>)}</div><div className="guide-limit"><b>10 conversations a day are free.</b><span></span></div></section>; }
-function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,onSignOut,onDeleteAccount}:{profile:Profile,setProfile:(p:Profile)=>void,email:string,nickname:string,usage:number,busy:boolean,onBack:()=>void,onSave:()=>void,onSignOut:()=>void,onDeleteAccount:()=>void}){
+function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,onSignOut,onDeleteAccount,feedbackSending,onSendFeedback}:{profile:Profile,setProfile:(p:Profile)=>void,email:string,nickname:string,usage:number,busy:boolean,onBack:()=>void,onSave:()=>void,onSignOut:()=>void,onDeleteAccount:()=>void,feedbackSending:boolean,onSendFeedback:(body:string,afterSend:()=>void)=>void}){
   const [confirmDelete,setConfirmDelete]=useState(false);
+  const [feedbackText,setFeedbackText]=useState("");
   const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]});
   return <section className="settings-view">
     <button className="back" onClick={onBack}>←</button>
@@ -720,6 +758,14 @@ function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,on
       <fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset>
     </div>
     <button className="primary" disabled={busy} onClick={onSave}>Save changes</button>
+    <div className="settings-card feedback-card">
+      <div>
+        <b>Send feedback to the myMoodly team</b>
+        <p>Tell us what's missing, what's confusing, or what would make this better for you.</p>
+        <div className="note-box"><textarea value={feedbackText} maxLength={1000} onChange={e=>setFeedbackText(e.target.value)} placeholder="What would make myMoodly better for you?"/><span>{feedbackText.length}/1000</span></div>
+        <button className="primary" disabled={feedbackSending || !feedbackText.trim()} onClick={()=>onSendFeedback(feedbackText.trim(), ()=>setFeedbackText(""))}>{feedbackSending ? "Sending…" : "Send feedback"}</button>
+      </div>
+    </div>
     <div className="settings-actions">
       <button className="text-button skip" disabled={busy} onClick={onSignOut}>{busy?"Working…":"Sign out"}</button>
       <button className="text-button skip danger" disabled={busy} onClick={()=>setConfirmDelete(true)}>Delete account &amp; data</button>

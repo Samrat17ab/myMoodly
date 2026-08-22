@@ -126,8 +126,8 @@ async function ensureConversationSurveyColumns(d1: D1Database) {
   }
 }
 
-// profiles predates the nickname columns, so existing rows need them added
-// rather than just created fresh.
+// profiles predates the nickname and banned_at columns, so existing rows
+// need them added rather than just created fresh.
 async function ensureProfileNicknameColumns(d1: D1Database) {
   const columns = await d1
     .prepare("PRAGMA table_info(profiles)")
@@ -138,6 +138,7 @@ async function ensureProfileNicknameColumns(d1: D1Database) {
     [
       ["nickname", "TEXT"],
       ["nickname_assigned_at", "INTEGER"],
+      ["banned_at", "INTEGER"],
     ] as const
   ).filter(([name]) => !existing.has(name));
 
@@ -253,6 +254,62 @@ export function ensureDbSchema() {
         body TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`),
+      // feedback/reports/blocks intentionally hold emails as plain text, not
+      // as foreign keys to profiles -- they're a permanent record that must
+      // survive account deletion (moderation history, ban evidence, and
+      // product feedback shouldn't vanish just because the account did).
+      d1.prepare(`CREATE TABLE IF NOT EXISTS feedback (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_email TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback (created_at)",
+      ),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS reports (
+        id TEXT PRIMARY KEY NOT NULL,
+        reporter_email TEXT NOT NULL,
+        reported_email TEXT NOT NULL,
+        conversation_id TEXT,
+        reason TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS reports_reported_idx ON reports (reported_email)",
+      ),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS blocks (
+        blocker_email TEXT NOT NULL,
+        blocked_email TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (blocker_email, blocked_email)
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS blocks_blocked_idx ON blocks (blocked_email)",
+      ),
+      // Persists a ban independent of the profiles row, so deleting and
+      // re-signing up under the same email can't undo a permanent ban --
+      // see the "profile" upsert handler in app/api/moodly/route.ts, which
+      // re-applies this on every profile create/update.
+      d1.prepare(`CREATE TABLE IF NOT EXISTS banned_emails (
+        email TEXT PRIMARY KEY NOT NULL,
+        report_count INTEGER NOT NULL,
+        banned_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )`),
+      // A permanent log of account deletions -- profiles are gone once
+      // deleted, so this is the only place left to see that an account
+      // existed at all, joined with its (also permanent) feedback/reports.
+      d1.prepare(`CREATE TABLE IF NOT EXISTS deleted_accounts (
+        id TEXT PRIMARY KEY NOT NULL,
+        email TEXT NOT NULL,
+        age INTEGER,
+        gender TEXT,
+        country TEXT,
+        deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS deleted_accounts_email_idx ON deleted_accounts (email)",
+      ),
       d1.prepare(
         "CREATE INDEX IF NOT EXISTS matchmaking_tickets_status_created_idx ON matchmaking_tickets (status, created_at)",
       ),

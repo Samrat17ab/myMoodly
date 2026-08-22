@@ -25,6 +25,22 @@ function errorResponse(error: unknown) {
   return jsonError(message, 500);
 }
 
+// The client only ever knows a chat partner by their rotating anonymous
+// nickname, never their real email -- report/block requests identify the
+// target by conversationId instead, and the partner's real email is
+// resolved here, server-side, after confirming the caller was actually a
+// member of that conversation (so a conversationId can't be used to target
+// an arbitrary stranger).
+async function resolveConversationPartner(d1: D1Database, conversationId: string, email: string) {
+  const members = await d1
+    .prepare("SELECT user_email FROM conversation_members WHERE conversation_id = ?")
+    .bind(conversationId)
+    .all<{ user_email: string }>();
+  const emails = members.results.map((row) => row.user_email);
+  if (!emails.includes(email)) return null;
+  return emails.find((candidate) => candidate !== email) ?? null;
+}
+
 export async function GET(request: Request) {
   try {
     await ensureDbSchema();
@@ -138,6 +154,18 @@ export async function POST(request: Request) {
           JSON.stringify(languages),
           1,
         )
+        .run();
+
+      // Re-applies a permanent ban on every profile create/update, so
+      // deleting the account and signing up again under the same email
+      // can't undo it -- banned_emails survives deletion, profiles doesn't.
+      await d1
+        .prepare(
+          `UPDATE profiles
+           SET banned_at = COALESCE(banned_at, (SELECT banned_at FROM banned_emails WHERE email = ?))
+           WHERE email = ?`,
+        )
+        .bind(email, email)
         .run();
 
       const nicknameRow = await d1
@@ -297,6 +325,82 @@ export async function POST(request: Request) {
       return Response.json({ id }, { status: 201 });
     }
 
+    if (type === "block") {
+      const conversationId = typeof payload.conversationId === "string" ? payload.conversationId : "";
+      const targetEmail = conversationId
+        ? await resolveConversationPartner(d1, conversationId, email)
+        : null;
+      if (!targetEmail) return jsonError("Conversation not found", 404);
+
+      await d1
+        .prepare("INSERT OR IGNORE INTO blocks (blocker_email, blocked_email) VALUES (?, ?)")
+        .bind(email, targetEmail)
+        .run();
+
+      return Response.json({ blocked: true });
+    }
+
+    if (type === "report") {
+      const conversationId = typeof payload.conversationId === "string" ? payload.conversationId : "";
+      const reason = typeof payload.reason === "string" ? payload.reason.trim().slice(0, 200) : "";
+      const targetEmail = conversationId
+        ? await resolveConversationPartner(d1, conversationId, email)
+        : null;
+      if (!targetEmail) return jsonError("Conversation not found", 404);
+      if (!reason) return jsonError("A report reason is required");
+
+      const id = crypto.randomUUID();
+      await d1.batch([
+        d1
+          .prepare(
+            `INSERT INTO reports (id, reporter_email, reported_email, conversation_id, reason)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .bind(id, email, targetEmail, conversationId, reason),
+        // Reporting someone implies you don't want to be matched with them
+        // again either, so it carries the same future-match exclusion as an
+        // explicit block.
+        d1
+          .prepare("INSERT OR IGNORE INTO blocks (blocker_email, blocked_email) VALUES (?, ?)")
+          .bind(email, targetEmail),
+      ]);
+
+      // Distinct reporters, not raw report rows, so one person can't fake a
+      // ban by reporting the same target repeatedly.
+      const distinctReporters = await d1
+        .prepare("SELECT COUNT(DISTINCT reporter_email) AS count FROM reports WHERE reported_email = ?")
+        .bind(targetEmail)
+        .first<{ count: number }>();
+      const reportCount = distinctReporters?.count ?? 0;
+      if (reportCount >= 3) {
+        await d1.batch([
+          d1
+            .prepare("UPDATE profiles SET banned_at = unixepoch() WHERE email = ? AND banned_at IS NULL")
+            .bind(targetEmail),
+          // The permanent record -- profiles.banned_at alone wouldn't survive
+          // the reported user deleting their account and signing up again.
+          d1
+            .prepare("INSERT OR IGNORE INTO banned_emails (email, report_count) VALUES (?, ?)")
+            .bind(targetEmail, reportCount),
+        ]);
+      }
+
+      return Response.json({ id, reported: true });
+    }
+
+    if (type === "feedback") {
+      const body = typeof payload.body === "string" ? payload.body.trim().slice(0, 1000) : "";
+      if (!body) return jsonError("Feedback can't be empty");
+
+      const id = crypto.randomUUID();
+      await d1
+        .prepare("INSERT INTO feedback (id, user_email, body) VALUES (?, ?, ?)")
+        .bind(id, email, body)
+        .run();
+
+      return Response.json({ id }, { status: 201 });
+    }
+
     return jsonError("Unknown operation");
   } catch (error) {
     return errorResponse(error);
@@ -313,7 +417,21 @@ export async function DELETE(request: Request) {
     if (!email) return jsonError("Authentication required", 401);
 
     const d1 = getD1();
+    const profile = await d1
+      .prepare("SELECT age, gender, country FROM profiles WHERE email = ? LIMIT 1")
+      .bind(email)
+      .first<{ age: number; gender: string; country: string }>();
+
     await d1.batch([
+      // A permanent record that this account existed and was deleted --
+      // profiles, check_ins, and conversation history all disappear below,
+      // but feedback/reports/bans (kept in their own tables, not linked by
+      // foreign key) stay queryable by email regardless.
+      d1
+        .prepare(
+          "INSERT INTO deleted_accounts (id, email, age, gender, country) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(crypto.randomUUID(), email, profile?.age ?? null, profile?.gender ?? null, profile?.country ?? null),
       d1.prepare("DELETE FROM profiles WHERE email = ?").bind(email),
       d1.prepare("DELETE FROM auth_sessions WHERE user_email = ?").bind(email),
       d1.prepare("DELETE FROM oauth_identities WHERE user_email = ?").bind(email),

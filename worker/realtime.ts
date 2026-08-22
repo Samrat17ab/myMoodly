@@ -46,18 +46,51 @@ function parseSqliteTimestamp(value: string): number {
   return Date.parse(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
 }
 
+// Durable Objects only guarantee one request's JS runs at a time -- an
+// `await` still lets a *different* incoming request interleave in the gap,
+// so two separate tryMatch() calls (e.g. two other users each independently
+// considering the same third, idle candidate) can both read that
+// candidate's ticket as 'waiting' before either has written its own claim.
+// This conditional UPDATE is the actual point of exclusivity. Note the
+// extra COUNT(*) guard: `WHERE id IN (a, b) AND status = 'waiting'` alone
+// evaluates each row independently, so if only one of the two is still
+// waiting it updates that one row alone (changes=1) and leaves it claimed
+// against a conversation that never gets created -- the subquery makes
+// "both still waiting" a single precondition shared by both rows, so this
+// statement claims both or neither, never one.
+async function claimTickets(
+  d1: D1Database,
+  conversationId: string,
+  ticketIds: [string, string],
+) {
+  const result = await d1
+    .prepare(
+      `UPDATE matchmaking_tickets
+       SET status = 'matched', conversation_id = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id IN (?, ?)
+         AND status = 'waiting'
+         AND (
+           SELECT COUNT(*) FROM matchmaking_tickets
+           WHERE id IN (?, ?) AND status = 'waiting'
+         ) = 2`,
+    )
+    .bind(conversationId, ticketIds[0], ticketIds[1], ticketIds[0], ticketIds[1])
+    .run();
+  return result.meta.changes === 2;
+}
+
 // A user's anonymous name to conversation partners is their own profile
 // nickname (worker/nickname.ts), so what a partner sees always matches what
 // that user sees for themselves in Settings, and only changes when their
-// nickname rotates (every 24h) rather than per conversation.
-async function createConversationWithMemberNicknames(
+// nickname rotates (every 24h) rather than per conversation. Only call this
+// after claimTickets() has confirmed exclusive ownership of both tickets.
+async function createConversationRecord(
   d1: D1Database,
   conversationId: string,
   conversationCreatedAt: string,
   conversationExpiresAt: string,
   memberA: string,
   memberB: string,
-  ticketIds: [string, string],
 ) {
   const profileRows = await d1
     .prepare(
@@ -92,13 +125,6 @@ async function createConversationWithMemberNicknames(
           (conversation_id, user_email, anonymous_name) VALUES (?, ?, ?)`,
       )
       .bind(conversationId, memberB, nameB),
-    d1
-      .prepare(
-        `UPDATE matchmaking_tickets
-         SET status = 'matched', conversation_id = ?, updated_at = CURRENT_TIMESTAMP
-         WHERE id IN (?, ?) AND status = 'waiting'`,
-      )
-      .bind(conversationId, ticketIds[0], ticketIds[1]),
   ]);
 }
 
@@ -312,6 +338,17 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
       return Response.json({ error: "Check-in not found" }, { status: 404 });
     }
 
+    const banned = await this.env.DB
+      .prepare("SELECT banned_at FROM profiles WHERE email = ? LIMIT 1")
+      .bind(email)
+      .first<{ banned_at: number | null }>();
+    if (banned?.banned_at) {
+      return Response.json(
+        { error: "Your account has been suspended after multiple reports and can no longer match with others." },
+        { status: 403 },
+      );
+    }
+
     const existing = await this.env.DB
       .prepare(
         `SELECT id, status, conversation_id
@@ -417,6 +454,11 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
              (mt.match_mode = 'similar' AND mt.quadrant = ?)
              OR (mt.match_mode = 'different' AND mt.quadrant <> ?)
            )
+           AND NOT EXISTS (
+             SELECT 1 FROM blocks
+             WHERE (blocker_email = ? AND blocked_email = mt.user_email)
+                OR (blocker_email = mt.user_email AND blocked_email = ?)
+           )
          ORDER BY mt.created_at ASC
          LIMIT 1`,
       )
@@ -430,23 +472,27 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
         current.quadrant,
         current.quadrant,
         current.quadrant,
+        email,
+        email,
       )
       .first<WaitingTicketRow>();
     if (!candidate) return;
 
     const conversationId = crypto.randomUUID();
+    const claimed = await claimTickets(this.env.DB, conversationId, [current.id, candidate.id]);
+    if (!claimed) return;
+
     const conversationCreatedAt = new Date().toISOString();
     const conversationExpiresAt = new Date(
       Date.now() + CHAT_DURATION_SECONDS * 1000,
     ).toISOString();
-    await createConversationWithMemberNicknames(
+    await createConversationRecord(
       this.env.DB,
       conversationId,
       conversationCreatedAt,
       conversationExpiresAt,
       current.user_email,
       candidate.user_email,
-      [current.id, candidate.id],
     );
   }
 
