@@ -86,7 +86,7 @@ test("matching requires a live queue heartbeat and chats expire", async () => {
   assert.match(realtime, /mt\.updated_at >= datetime\('now', '-15 seconds'\)/);
   assert.match(
     realtime,
-    /UPDATE matchmaking_tickets SET updated_at = CURRENT_TIMESTAMP[\s\S]*status = 'waiting'/,
+    /UPDATE matchmaking_tickets[\s\S]*?SET updated_at = CURRENT_TIMESTAMP,[\s\S]*?status = CASE WHEN created_at < datetime\('now', \?\) THEN 'expired' ELSE status END[\s\S]*?status = 'waiting'/,
   );
   assert.match(realtime, /CONVERSATION_LIFETIME = "-20 minutes"/);
   assert.match(realtime, /SET status = 'ended', ended_at = CURRENT_TIMESTAMP/);

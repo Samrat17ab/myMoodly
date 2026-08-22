@@ -150,6 +150,27 @@ async function ensureProfileNicknameColumns(d1: D1Database) {
   }
 }
 
+let lastAuthArtifactCleanupAt = 0;
+const AUTH_ARTIFACT_CLEANUP_INTERVAL_MS = 60_000;
+
+// auth_sessions/otp_codes/oauth_states all accumulate expired rows during
+// normal use, and every sign-in/verify/OAuth request used to sweep the
+// *entire* table for expired rows before its own (unrelated) write --
+// serializing real request latency behind a full-table scan on every single
+// request. Every reader of these tables already checks expiry itself
+// (`expires_at > unixepoch()`), so expired rows are inert, not incorrect,
+// between sweeps -- safe to throttle to once per isolate per interval.
+export async function cleanupExpiredAuthArtifacts(d1: D1Database) {
+  const now = Date.now();
+  if (now - lastAuthArtifactCleanupAt < AUTH_ARTIFACT_CLEANUP_INTERVAL_MS) return;
+  lastAuthArtifactCleanupAt = now;
+  await d1.batch([
+    d1.prepare("DELETE FROM auth_sessions WHERE expires_at <= unixepoch()"),
+    d1.prepare("DELETE FROM otp_codes WHERE expires_at <= unixepoch()"),
+    d1.prepare("DELETE FROM oauth_states WHERE expires_at <= unixepoch()"),
+  ]);
+}
+
 export function ensureDbSchema() {
   schemaReady ??= (async () => {
     const d1 = getD1();

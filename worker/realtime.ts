@@ -34,6 +34,10 @@ const LEGACY_CONVERSATION_LIFETIME = "-20 minutes";
 const MINIMUM_MATCH_WAIT_SECONDS = 3;
 const SYNCHRONIZED_CHAT_DELAY_SECONDS = 2;
 const CHAT_DURATION_SECONDS = 20 * 60;
+// How often the Matchmaker's alarm sweeps stale tickets/conversations,
+// instead of that global sweep running on every single matchmaking request
+// (see Matchmaker's constructor and alarm() for why).
+const CLEANUP_INTERVAL_MS = 30_000;
 
 // D1 timestamps come back either as our own `Date.toISOString()` strings
 // (already has "T" and "Z") or as SQLite's `CURRENT_TIMESTAMP`/`datetime()`
@@ -244,13 +248,32 @@ async function ticketResponse(d1: D1Database, ticket: TicketRow, email: string) 
 }
 
 export class Matchmaker extends DurableObject<RealtimeEnv> {
+  // Every join/status/cancel call from every user worldwide funnels through
+  // this single object, so schema setup and the global stale-state sweep
+  // must not run per-request (that serialized D1 round-trips for all of them
+  // behind this one object's request queue). Schema setup instead runs once
+  // when the instance is (re)constructed, and the sweep runs on a recurring
+  // alarm -- see alarm() below.
+  constructor(ctx: DurableObjectState, env: RealtimeEnv) {
+    super(ctx, env);
+    ctx.blockConcurrencyWhile(async () => {
+      await ensureRealtimeSchema(env.DB);
+      if ((await ctx.storage.getAlarm()) === null) {
+        await ctx.storage.setAlarm(Date.now() + CLEANUP_INTERVAL_MS);
+      }
+    });
+  }
+
+  async alarm() {
+    await expireStaleRealtimeState(this.env.DB);
+    await this.ctx.storage.setAlarm(Date.now() + CLEANUP_INTERVAL_MS);
+  }
+
   async fetch(request: Request): Promise<Response> {
     if (request.method !== "POST") {
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    await ensureRealtimeSchema(this.env.DB);
-    await expireStaleRealtimeState(this.env.DB);
     const email = request.headers.get("x-moodly-user-email")?.trim().toLowerCase();
     if (!email) {
       return Response.json({ error: "Authentication required" }, { status: 401 });
@@ -295,9 +318,10 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
          FROM matchmaking_tickets
          WHERE user_email = ?
            AND status = 'waiting'
+           AND created_at >= datetime('now', ?)
          ORDER BY created_at DESC LIMIT 1`,
       )
-      .bind(email)
+      .bind(email, WAITING_TICKET_LIFETIME)
       .first<TicketRow>();
     if (existing) {
       return Response.json(await ticketResponse(this.env.DB, existing, email));
@@ -327,12 +351,19 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
 
   private async status(email: string, payload: Record<string, unknown>) {
     const ticketId = typeof payload.ticketId === "string" ? payload.ticketId : "";
+    // Expires this one ticket inline (by primary key, so it's cheap) rather
+    // than waiting on the next periodic sweep, so the polling user still
+    // sees "expired" promptly. The sweep remains as a backstop for tickets
+    // whose owner stopped polling (e.g. closed the tab) and so never hits
+    // this path again to self-expire.
     await this.env.DB
       .prepare(
-        `UPDATE matchmaking_tickets SET updated_at = CURRENT_TIMESTAMP
+        `UPDATE matchmaking_tickets
+         SET updated_at = CURRENT_TIMESTAMP,
+             status = CASE WHEN created_at < datetime('now', ?) THEN 'expired' ELSE status END
          WHERE id = ? AND user_email = ? AND status = 'waiting'`,
       )
-      .bind(ticketId, email)
+      .bind(WAITING_TICKET_LIFETIME, ticketId, email)
       .run();
     await this.tryMatch(email, ticketId);
     const ticket = await this.env.DB
@@ -449,8 +480,9 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
       return new Response("Expected WebSocket upgrade", { status: 426 });
     }
 
-    await ensureRealtimeSchema(this.env.DB);
-    await expireStaleRealtimeState(this.env.DB);
+    // Schema setup happens once in Matchmaker's constructor -- a conversation
+    // (and therefore this ChatRoom) can't exist until Matchmaker has matched
+    // one, so the schema is already guaranteed present by then.
     const email = request.headers.get("x-moodly-user-email")?.trim().toLowerCase();
     const conversationId = request.headers.get("x-moodly-conversation-id");
     if (!email || !conversationId) {
@@ -530,7 +562,6 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
   async webSocketMessage(socket: WebSocket, raw: string | ArrayBuffer) {
     const attachment = socket.deserializeAttachment() as ConnectionAttachment | null;
     if (!attachment || typeof raw !== "string") return;
-    await expireStaleRealtimeState(this.env.DB);
 
     let payload: Record<string, unknown>;
     try {

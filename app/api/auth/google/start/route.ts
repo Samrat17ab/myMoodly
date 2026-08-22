@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { ensureDbSchema, getD1 } from "@/db";
+import { cleanupExpiredAuthArtifacts, ensureDbSchema, getD1 } from "@/db";
 import {
   createOpaqueToken,
   googleStateCookie,
@@ -34,16 +34,15 @@ export async function GET(request: Request) {
   const nonce = createOpaqueToken();
   const d1 = getD1();
 
-  await d1.batch([
-    d1.prepare("DELETE FROM oauth_states WHERE expires_at <= unixepoch()"),
-    d1
-      .prepare(
-        `INSERT INTO oauth_states
-          (state_hash, code_verifier, nonce, expires_at)
-         VALUES (?, ?, ?, unixepoch() + ?)`,
-      )
-      .bind(stateHash, codeVerifier, nonce, OAUTH_STATE_TTL_SECONDS),
-  ]);
+  await cleanupExpiredAuthArtifacts(d1);
+  await d1
+    .prepare(
+      `INSERT INTO oauth_states
+        (state_hash, code_verifier, nonce, expires_at)
+       VALUES (?, ?, ?, unixepoch() + ?)`,
+    )
+    .bind(stateHash, codeVerifier, nonce, OAUTH_STATE_TTL_SECONDS)
+    .run();
 
   const authorizationUrl = new URL(
     "https://accounts.google.com/o/oauth2/v2/auth",

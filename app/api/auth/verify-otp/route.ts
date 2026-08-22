@@ -1,4 +1,4 @@
-import { ensureDbSchema, getD1 } from "@/db";
+import { cleanupExpiredAuthArtifacts, ensureDbSchema, getD1 } from "@/db";
 import {
   createOpaqueToken,
   hashToken,
@@ -56,11 +56,11 @@ export async function POST(request: Request) {
 
   const sessionToken = createOpaqueToken();
   const sessionHash = await hashToken(sessionToken);
+  await cleanupExpiredAuthArtifacts(d1);
   await d1.batch([
     d1
       .prepare("UPDATE otp_codes SET used_at = unixepoch() WHERE code_hash = ?")
       .bind(codeHash),
-    d1.prepare("DELETE FROM auth_sessions WHERE expires_at <= unixepoch()"),
     d1
       .prepare(
         `INSERT INTO auth_sessions

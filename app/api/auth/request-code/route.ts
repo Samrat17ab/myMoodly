@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { ensureDbSchema, getD1 } from "@/db";
+import { cleanupExpiredAuthArtifacts, ensureDbSchema, getD1 } from "@/db";
 import {
   createOpaqueToken,
   createOtpCode,
@@ -31,16 +31,15 @@ export async function POST(request: Request) {
   if (!REQUIRE_EMAIL_VERIFICATION) {
     const sessionToken = createOpaqueToken();
     const sessionHash = await hashToken(sessionToken);
-    await d1.batch([
-      d1.prepare("DELETE FROM auth_sessions WHERE expires_at <= unixepoch()"),
-      d1
-        .prepare(
-          `INSERT INTO auth_sessions
-            (token_hash, user_email, expires_at)
-           VALUES (?, ?, unixepoch() + ?)`,
-        )
-        .bind(sessionHash, email, SESSION_TTL_SECONDS),
-    ]);
+    await cleanupExpiredAuthArtifacts(d1);
+    await d1
+      .prepare(
+        `INSERT INTO auth_sessions
+          (token_hash, user_email, expires_at)
+         VALUES (?, ?, unixepoch() + ?)`,
+      )
+      .bind(sessionHash, email, SESSION_TTL_SECONDS)
+      .run();
     return Response.json(
       { verified: true },
       { headers: { "set-cookie": sessionCookie(sessionToken) } },
@@ -63,12 +62,10 @@ export async function POST(request: Request) {
 
   const code = createOtpCode();
   const codeHash = await hashToken(code);
+  await cleanupExpiredAuthArtifacts(d1);
   await d1.batch([
     d1
-      .prepare(
-        `DELETE FROM otp_codes
-         WHERE expires_at <= unixepoch() OR (email = ? AND used_at IS NULL)`,
-      )
+      .prepare(`DELETE FROM otp_codes WHERE email = ? AND used_at IS NULL`)
       .bind(email),
     d1
       .prepare(

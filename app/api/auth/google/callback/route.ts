@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { ensureDbSchema, getD1 } from "@/db";
+import { cleanupExpiredAuthArtifacts, ensureDbSchema, getD1 } from "@/db";
 import {
   clearGoogleStateCookie,
   createOpaqueToken,
@@ -126,6 +126,7 @@ export async function GET(request: Request) {
 
     const sessionToken = createOpaqueToken();
     const sessionHash = await hashToken(sessionToken);
+    await cleanupExpiredAuthArtifacts(d1);
     await d1.batch([
       d1
         .prepare(
@@ -137,7 +138,6 @@ export async function GET(request: Request) {
              updated_at = unixepoch()`,
         )
         .bind(subject, userEmail, claimedEmail),
-      d1.prepare("DELETE FROM auth_sessions WHERE expires_at <= unixepoch()"),
       d1
         .prepare(
           `INSERT INTO auth_sessions
