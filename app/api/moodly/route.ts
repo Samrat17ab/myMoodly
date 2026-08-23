@@ -1,11 +1,13 @@
 import { env } from "cloudflare:workers";
 import { ensureDbSchema, getD1 } from "@/db";
+import { recordAlert } from "@/worker/alerts";
 import {
   authenticatedRequestEmail,
   type AccessAuthEnv,
 } from "@/worker/access-auth";
 import { clearSessionCookie } from "@/worker/magic-auth";
 import { ensureNickname } from "@/worker/nickname";
+import type { SmtpEnv } from "@/worker/smtp";
 
 type ProfilePayload = {
   age?: string | number;
@@ -387,6 +389,13 @@ export async function POST(request: Request) {
           .bind(email, targetEmail),
       ]);
 
+      await recordAlert(
+        d1,
+        env as unknown as SmtpEnv,
+        "report",
+        `${email} reported ${targetEmail} (${reason}).`,
+      );
+
       // Distinct reporters, not raw report rows, so one person can't fake a
       // ban by reporting the same target repeatedly.
       const distinctReporters = await d1
@@ -405,6 +414,12 @@ export async function POST(request: Request) {
             .prepare("INSERT OR IGNORE INTO banned_emails (email, report_count) VALUES (?, ?)")
             .bind(targetEmail, reportCount),
         ]);
+        await recordAlert(
+          d1,
+          env as unknown as SmtpEnv,
+          "ban",
+          `${targetEmail} was permanently banned after ${reportCount} distinct reports.`,
+        );
       }
 
       return Response.json({ id, reported: true });

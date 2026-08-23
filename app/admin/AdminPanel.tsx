@@ -23,6 +23,7 @@ type Overview = {
   usersAtFreeCapToday: number;
   returnedUsers: number;
   totalUsersWithCheckIn: number;
+  alertsLast24h: number;
 };
 type ReportRow = {
   reported_email: string;
@@ -44,8 +45,9 @@ type ModeRow = { match_mode: string; n: number; better: number; same: number; wo
 type RetentionRow = { mood_change: string; n: number; returned: number };
 type RelaxedRow = { matched_relaxed: number; n: number; better: number; same: number; worse: number };
 type MoodPairsData = { pairs: MoodPairRow[]; byMode: ModeRow[]; retentionByFirstOutcome: RetentionRow[]; byRelaxed: RelaxedRow[] };
+type AlertRow = { id: string; type: string; message: string; created_at: string };
 
-const TABS = ["Overview", "Mood patterns", "Reports", "Bans", "Blocks", "Feedback", "Deleted accounts"] as const;
+const TABS = ["Overview", "Alerts", "Mood patterns", "Reports", "Bans", "Blocks", "Feedback", "Deleted accounts"] as const;
 type Tab = typeof TABS[number];
 
 async function adminFetch(view: string) {
@@ -84,6 +86,7 @@ export default function AdminPanel() {
   const [feedback, setFeedback] = useState<FeedbackRow[] | null>(null);
   const [deleted, setDeleted] = useState<DeletedRow[] | null>(null);
   const [moodPairs, setMoodPairs] = useState<MoodPairsData | null>(null);
+  const [alerts, setAlerts] = useState<AlertRow[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -98,6 +101,7 @@ export default function AdminPanel() {
     setError("");
     try {
       if (next === "Overview" && !overview) setOverview(await adminFetch("overview"));
+      if (next === "Alerts" && !alerts) setAlerts((await adminFetch("alerts")).alerts);
       if (next === "Mood patterns" && !moodPairs) setMoodPairs(await adminFetch("moodPairs"));
       if (next === "Reports" && !reports) setReports((await adminFetch("reports")).reports);
       if (next === "Bans" && !bans) setBans((await adminFetch("bans")).bans);
@@ -107,7 +111,7 @@ export default function AdminPanel() {
     } catch {
       setError("Could not load this data. Try again.");
     }
-  }, [overview, moodPairs, reports, bans, blocks, feedback, deleted]);
+  }, [overview, alerts, moodPairs, reports, bans, blocks, feedback, deleted]);
 
   const unban = async (email: string) => {
     setBusy(true);
@@ -177,6 +181,7 @@ export default function AdminPanel() {
           <StatCard label="Active chats right now" value={overview.activeConversationsNow} />
           <StatCard label="Avg. chat length" value={formatSeconds(overview.avgSessionSeconds)} />
           <StatCard label="Hit free daily cap today" value={overview.usersAtFreeCapToday} />
+          <StatCard label="Alerts (last 24h)" value={overview.alertsLast24h} />
           <StatCard label="Returned (next day or later)" value={pct(overview.returnedUsers, overview.totalUsersWithCheckIn)} />
           <StatCard label="Total reports filed" value={overview.totalReports} />
           <StatCard label="Accounts banned" value={overview.totalBans} />
@@ -186,6 +191,24 @@ export default function AdminPanel() {
           <RatingCard label="Felt understood in the conversation" breakdown={overview.understoodBreakdown} options={["Yes", "Somewhat", "No"]} />
           <RatingCard label="How they felt compared to before" breakdown={overview.moodChangeBreakdown} options={["Better", "Same", "Worse"]} />
           <RatingCard label="Match quality" breakdown={overview.ratingBreakdown} options={["Great", "Okay", "Not for me"]} />
+        </section>
+      )}
+
+      {tab === "Alerts" && alerts && (
+        <section className="admin-table-wrap">
+          <table className="admin-table">
+            <thead><tr><th>Type</th><th>Message</th><th>When</th></tr></thead>
+            <tbody>
+              {alerts.length === 0 && <tr><td colSpan={3} className="admin-empty">No alerts yet.</td></tr>}
+              {alerts.map((a) => (
+                <tr key={a.id}>
+                  <td><span className={`admin-alert-badge admin-alert-${a.type}`}>{a.type.replace("_", " ")}</span></td>
+                  <td className="admin-body-cell">{a.message}</td>
+                  <td>{formatDate(a.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       )}
 

@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         totalUsers, newToday, newThisWeek,
         checkInsToday, matchesToday, matchesThisWeek, activeNow,
         totalReports, totalBans, totalBlocks, totalFeedback, totalDeleted,
-        avgSession, ratingRows, understoodRows, moodChangeRows, capHits, retention,
+        avgSession, ratingRows, understoodRows, moodChangeRows, capHits, retention, alertsLast24h,
       ] = await d1.batch([
         d1.prepare("SELECT COUNT(*) AS n FROM profiles"),
         d1.prepare("SELECT COUNT(*) AS n FROM profiles WHERE created_at >= datetime('now', 'start of day')"),
@@ -77,6 +77,7 @@ export async function GET(request: Request) {
              ) THEN 1 ELSE 0 END) AS returned
            FROM first_checkins fc`,
         ),
+        d1.prepare("SELECT COUNT(*) AS n FROM alerts WHERE created_at >= datetime('now', '-1 day')"),
       ]);
 
       const ratings: Record<string, number> = { Great: 0, Okay: 0, "Not for me": 0 };
@@ -112,6 +113,7 @@ export async function GET(request: Request) {
         usersAtFreeCapToday: (capHits.results[0] as { n: number }).n,
         returnedUsers: (retention.results[0] as { total: number; returned: number | null }).returned ?? 0,
         totalUsersWithCheckIn: (retention.results[0] as { total: number; returned: number | null }).total,
+        alertsLast24h: (alertsLast24h.results[0] as { n: number }).n,
       });
     }
 
@@ -198,6 +200,13 @@ export async function GET(request: Request) {
         retentionByFirstOutcome: retentionByFirstOutcome.results,
         byRelaxed: byRelaxed.results,
       });
+    }
+
+    if (view === "alerts") {
+      const rows = await d1
+        .prepare("SELECT id, type, message, created_at FROM alerts ORDER BY created_at DESC LIMIT 200")
+        .all();
+      return Response.json({ alerts: rows.results });
     }
 
     if (view === "reports") {

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { cleanupExpiredAuthArtifacts, ensureDbSchema, getD1 } from "@/db";
+import { recordAlert } from "@/worker/alerts";
 import {
   createOpaqueToken,
   createOtpCode,
@@ -85,6 +86,12 @@ export async function POST(request: Request) {
       .run();
     const message =
       error instanceof Error ? error.message : "Could not send sign-in code.";
+    await recordAlert(
+      d1,
+      env as unknown as SmtpEnv,
+      "otp_failure",
+      `Sign-in code to ${email} failed to send: ${message}`,
+    );
     return Response.json({ error: message }, { status: 502 });
   }
 

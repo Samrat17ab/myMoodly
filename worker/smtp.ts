@@ -30,15 +30,18 @@ function base64Ascii(value: string) {
   return btoa(value);
 }
 
-export async function sendOtpEmail(
+// The raw SMTP transaction, shared by every outbound email this app sends
+// (OTP codes, admin alerts) -- only the recipient/subject/body differ.
+async function sendMail(
   env: SmtpEnv,
   recipient: string,
-  code: string,
+  subject: string,
+  html: string,
 ) {
   const username = env.SMTP_USERNAME?.trim().toLowerCase();
   const password = env.GMAIL_APP_PASSWORD?.replace(/[^a-zA-Z0-9]/g, "");
   if (!username || !password) {
-    throw new Error("Email sign-in is not configured.");
+    throw new Error("Email sending is not configured.");
   }
   if (password.length !== 16) {
     throw new Error("The Gmail app password is not a valid 16-character credential.");
@@ -89,22 +92,11 @@ export async function sendOtpEmail(
     return expect(allowed);
   };
 
-  const safeRecipient = escapeHtml(recipient);
-  const safeCode = escapeHtml(code);
   const messageId = crypto.randomUUID();
-  const html = [
-    "<!doctype html><html><body style=\"font-family:Arial,sans-serif;color:#18251f;line-height:1.6\">",
-    "<div style=\"max-width:560px;margin:32px auto;padding:32px;border:1px solid #dbe8e0;border-radius:18px\">",
-    "<h1 style=\"margin:0 0 16px;color:#214f3b\">Sign in to Moodly</h1>",
-    `<p>Use the code below to sign in as ${safeRecipient}.</p>`,
-    `<p style=\"margin:28px 0;font-size:32px;font-weight:700;letter-spacing:8px;color:#214f3b\">${safeCode}</p>`,
-    `<p style=\"font-size:13px;color:#5d7067\">This code expires in 10 minutes and can be used once. If you did not request it, you can ignore this email.</p>`,
-    "</div></body></html>",
-  ].join("\r\n");
   const headersAndBody = [
     `From: Moodly <${username}>`,
     `To: ${recipient}`,
-    "Subject: Your Moodly sign-in code",
+    `Subject: ${subject}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${messageId}@moodly>`,
     "MIME-Version: 1.0",
@@ -133,4 +125,47 @@ export async function sendOtpEmail(
     writer.releaseLock();
     await socket.close().catch(() => undefined);
   }
+}
+
+export async function sendOtpEmail(
+  env: SmtpEnv,
+  recipient: string,
+  code: string,
+) {
+  const safeRecipient = escapeHtml(recipient);
+  const safeCode = escapeHtml(code);
+  const html = [
+    "<!doctype html><html><body style=\"font-family:Arial,sans-serif;color:#18251f;line-height:1.6\">",
+    "<div style=\"max-width:560px;margin:32px auto;padding:32px;border:1px solid #dbe8e0;border-radius:18px\">",
+    "<h1 style=\"margin:0 0 16px;color:#214f3b\">Sign in to Moodly</h1>",
+    `<p>Use the code below to sign in as ${safeRecipient}.</p>`,
+    `<p style=\"margin:28px 0;font-size:32px;font-weight:700;letter-spacing:8px;color:#214f3b\">${safeCode}</p>`,
+    `<p style=\"font-size:13px;color:#5d7067\">This code expires in 10 minutes and can be used once. If you did not request it, you can ignore this email.</p>`,
+    "</div></body></html>",
+  ].join("\r\n");
+
+  await sendMail(env, recipient, "Your Moodly sign-in code", html);
+}
+
+// Admin alerts (new reports, bans, OTP delivery failures) go to the same
+// account myMoodly sends from -- no separate recipient to configure, and
+// it's the account you're already checking for the report itself.
+export async function sendAlertEmail(
+  env: SmtpEnv,
+  subject: string,
+  message: string,
+) {
+  const recipient = env.SMTP_USERNAME?.trim().toLowerCase();
+  if (!recipient) throw new Error("Alert email is not configured.");
+
+  const html = [
+    "<!doctype html><html><body style=\"font-family:Arial,sans-serif;color:#18251f;line-height:1.6\">",
+    "<div style=\"max-width:560px;margin:32px auto;padding:32px;border:1px solid #dbe8e0;border-radius:18px\">",
+    `<h1 style=\"margin:0 0 16px;color:#214f3b\">${escapeHtml(subject)}</h1>`,
+    `<p>${escapeHtml(message)}</p>`,
+    "<p style=\"font-size:12px;color:#8a9591\">Sent automatically by myMoodly's alert system.</p>",
+    "</div></body></html>",
+  ].join("\r\n");
+
+  await sendMail(env, recipient, subject, html);
 }

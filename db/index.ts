@@ -312,6 +312,19 @@ export function ensureDbSchema() {
       d1.prepare(
         "CREATE INDEX IF NOT EXISTS deleted_accounts_email_idx ON deleted_accounts (email)",
       ),
+      // A running log of things worth someone's attention -- new reports,
+      // bans, and outbound email failures -- shown in the admin panel and
+      // (for reports/bans, and rate-limited for otp_failure) emailed. See
+      // worker/alerts.ts.
+      d1.prepare(`CREATE TABLE IF NOT EXISTS alerts (
+        id TEXT PRIMARY KEY NOT NULL,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS alerts_created_idx ON alerts (created_at)",
+      ),
       d1.prepare(
         "CREATE INDEX IF NOT EXISTS matchmaking_tickets_status_created_idx ON matchmaking_tickets (status, created_at)",
       ),
