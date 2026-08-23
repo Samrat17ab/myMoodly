@@ -96,6 +96,41 @@ export async function GET(request: Request) {
       });
     }
 
+    if (view === "moodPairs") {
+      const pairs = await d1
+        .prepare(
+          `SELECT
+             mood_quadrant, matched_mood_quadrant,
+             COUNT(*) AS n,
+             SUM(CASE WHEN mood_change = 'Better' THEN 1 ELSE 0 END) AS better,
+             SUM(CASE WHEN mood_change = 'Same' THEN 1 ELSE 0 END) AS same,
+             SUM(CASE WHEN mood_change = 'Worse' THEN 1 ELSE 0 END) AS worse,
+             SUM(CASE WHEN understood = 'Yes' THEN 1 ELSE 0 END) AS understood_yes,
+             SUM(CASE WHEN partner_rating = 'Great' THEN 1 ELSE 0 END) AS rating_great
+           FROM conversation_surveys
+           WHERE mood_quadrant IS NOT NULL AND matched_mood_quadrant IS NOT NULL
+           GROUP BY mood_quadrant, matched_mood_quadrant
+           ORDER BY n DESC`,
+        )
+        .all();
+
+      const byMode = await d1
+        .prepare(
+          `SELECT
+             ci.match_mode AS match_mode,
+             COUNT(*) AS n,
+             SUM(CASE WHEN cs.mood_change = 'Better' THEN 1 ELSE 0 END) AS better,
+             SUM(CASE WHEN cs.mood_change = 'Same' THEN 1 ELSE 0 END) AS same,
+             SUM(CASE WHEN cs.mood_change = 'Worse' THEN 1 ELSE 0 END) AS worse
+           FROM conversation_surveys cs
+           JOIN check_ins ci ON ci.id = cs.check_in_id
+           GROUP BY ci.match_mode`,
+        )
+        .all();
+
+      return Response.json({ pairs: pairs.results, byMode: byMode.results });
+    }
+
     if (view === "reports") {
       const rows = await d1
         .prepare(

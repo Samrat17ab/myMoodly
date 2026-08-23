@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "How myMoodly collects, uses, stores, and protects personal information.",
 };
 
-const effectiveDate = "July 31, 2026";
+const effectiveDate = "August 23, 2026";
 
 export default function PrivacyPolicy() {
   return (
@@ -97,6 +97,22 @@ export default function PrivacyPolicy() {
             myMoodly does not sell personal information, use Google user data for
             advertising, or use private conversation content to train
             advertising or general-purpose AI models.
+          </p>
+          <h3>Research on mood and connection</h3>
+          <p>
+            A core purpose of myMoodly is to study whether connecting people by
+            mood helps them feel better, and which mood pairings tend to help
+            most. To do this, we analyze check-in information (such as your
+            mood category and emotion), your match preference, and your
+            self-reported outcome after a conversation (such as whether you
+            felt understood, and whether you felt better, the same, or worse
+            afterward) &mdash; typically in aggregate across many users rather than
+            by reviewing individual conversations. Findings from this analysis
+            may be used to improve how myMoodly matches people, including
+            through automated or machine-learning-based matching in the
+            future. This research use draws on the same information described
+            in this section and is subject to the same retention, security,
+            and access rights described elsewhere in this policy.
           </p>
         </section>
 

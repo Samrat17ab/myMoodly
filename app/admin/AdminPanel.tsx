@@ -34,8 +34,14 @@ type BanRow = { email: string; report_count: number; banned_at: number };
 type BlockRow = { blocker_email: string; blocked_email: string; created_at: string };
 type FeedbackRow = { id: string; user_email: string; body: string; created_at: string };
 type DeletedRow = { id: string; email: string; age: number | null; gender: string | null; country: string | null; deleted_at: string };
+type MoodPairRow = {
+  mood_quadrant: string; matched_mood_quadrant: string; n: number;
+  better: number; same: number; worse: number; understood_yes: number; rating_great: number;
+};
+type ModeRow = { match_mode: string; n: number; better: number; same: number; worse: number };
+type MoodPairsData = { pairs: MoodPairRow[]; byMode: ModeRow[] };
 
-const TABS = ["Overview", "Reports", "Bans", "Blocks", "Feedback", "Deleted accounts"] as const;
+const TABS = ["Overview", "Mood patterns", "Reports", "Bans", "Blocks", "Feedback", "Deleted accounts"] as const;
 type Tab = typeof TABS[number];
 
 async function adminFetch(view: string) {
@@ -60,6 +66,10 @@ function formatSeconds(seconds: number | null) {
   return `${m} min`;
 }
 
+function pct(count: number, total: number) {
+  return total > 0 ? `${Math.round((count / total) * 100)}% (${count})` : "—";
+}
+
 export default function AdminPanel() {
   const [status, setStatus] = useState<"loading" | "denied" | "ready">("loading");
   const [tab, setTab] = useState<Tab>("Overview");
@@ -69,6 +79,7 @@ export default function AdminPanel() {
   const [blocks, setBlocks] = useState<BlockRow[] | null>(null);
   const [feedback, setFeedback] = useState<FeedbackRow[] | null>(null);
   const [deleted, setDeleted] = useState<DeletedRow[] | null>(null);
+  const [moodPairs, setMoodPairs] = useState<MoodPairsData | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -83,6 +94,7 @@ export default function AdminPanel() {
     setError("");
     try {
       if (next === "Overview" && !overview) setOverview(await adminFetch("overview"));
+      if (next === "Mood patterns" && !moodPairs) setMoodPairs(await adminFetch("moodPairs"));
       if (next === "Reports" && !reports) setReports((await adminFetch("reports")).reports);
       if (next === "Bans" && !bans) setBans((await adminFetch("bans")).bans);
       if (next === "Blocks" && !blocks) setBlocks((await adminFetch("blocks")).blocks);
@@ -91,7 +103,7 @@ export default function AdminPanel() {
     } catch {
       setError("Could not load this data. Try again.");
     }
-  }, [overview, reports, bans, blocks, feedback, deleted]);
+  }, [overview, moodPairs, reports, bans, blocks, feedback, deleted]);
 
   const unban = async (email: string) => {
     setBusy(true);
@@ -169,6 +181,50 @@ export default function AdminPanel() {
           <RatingCard label="Felt understood in the conversation" breakdown={overview.understoodBreakdown} options={["Yes", "Somewhat", "No"]} />
           <RatingCard label="How they felt compared to before" breakdown={overview.moodChangeBreakdown} options={["Better", "Same", "Worse"]} />
           <RatingCard label="Match quality" breakdown={overview.ratingBreakdown} options={["Great", "Okay", "Not for me"]} />
+        </section>
+      )}
+
+      {tab === "Mood patterns" && moodPairs && (
+        <section className="admin-mood-section">
+          <p className="admin-mood-note">Each row is one combination of your mood at check-in and the mood you were matched with, with what people reported afterward. Quadrants: yellow = high energy + pleasant, red = high energy + unpleasant, green = low energy + pleasant, blue = low energy + unpleasant. Rows with a small N aren&apos;t reliable yet — early signal, not a conclusion.</p>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Your mood</th><th>Matched mood</th><th>N</th><th>Better</th><th>Same</th><th>Worse</th><th>Felt understood</th><th>Rated &quot;Great&quot;</th></tr></thead>
+              <tbody>
+                {moodPairs.pairs.length === 0 && <tr><td colSpan={8} className="admin-empty">Not enough survey responses yet.</td></tr>}
+                {moodPairs.pairs.map((p) => (
+                  <tr key={`${p.mood_quadrant}-${p.matched_mood_quadrant}`}>
+                    <td className="admin-cap">{p.mood_quadrant}</td>
+                    <td className="admin-cap">{p.matched_mood_quadrant}</td>
+                    <td>{p.n}</td>
+                    <td>{pct(p.better, p.n)}</td>
+                    <td>{pct(p.same, p.n)}</td>
+                    <td>{pct(p.worse, p.n)}</td>
+                    <td>{pct(p.understood_yes, p.n)}</td>
+                    <td>{pct(p.rating_great, p.n)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <h3 className="admin-subhead">By match preference (chose &quot;similar&quot; vs. &quot;different&quot; mood)</h3>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Preference</th><th>N</th><th>Better</th><th>Same</th><th>Worse</th></tr></thead>
+              <tbody>
+                {moodPairs.byMode.length === 0 && <tr><td colSpan={5} className="admin-empty">Not enough data yet.</td></tr>}
+                {moodPairs.byMode.map((m) => (
+                  <tr key={m.match_mode}>
+                    <td className="admin-cap">{m.match_mode}</td>
+                    <td>{m.n}</td>
+                    <td>{pct(m.better, m.n)}</td>
+                    <td>{pct(m.same, m.n)}</td>
+                    <td>{pct(m.worse, m.n)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 

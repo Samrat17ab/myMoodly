@@ -728,7 +728,7 @@ export default function MoodlyApp() {
         <button className="primary wide" onClick={() => void submitSurvey()}>Submit response</button>
         <button className="text-button skip" onClick={() => navigate("home")}>Skip for now</button>
       </section>}
-      {view === "paywall" && <Paywall onBack={() => navigate("home")} onUpgrade={() => setToast("Secure subscription checkout is ready for your payment provider.")}/>}
+      {view === "paywall" && <Paywall onBack={() => navigate("home")}/>}
       {view === "resources" && <Resources country={profile.country} onBack={goBack}/>}
       {view === "guide" && <Guide onBack={goBack}/>}
       {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} nickname={nickname} usage={usage} busy={accountBusy} onBack={goBack} onSave={() => void saveProfile(goBack)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()} feedbackSending={feedbackSending} onSendFeedback={(body, afterSend) => void submitFeedback(body, afterSend)}/>}
@@ -794,4 +794,4 @@ function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,on
     </Modal>}
   </section>;
 }
-function Paywall({onBack,onUpgrade}:{onBack:()=>void,onUpgrade:()=>void}){ return <section className="paywall"><button className="back" onClick={onBack}>←</button><div className="pay-visual"><span>∞</span></div><span className="overline">MOODLY UNLIMITED</span><h1>Keep the conversation open.</h1><p>You've used today's 10 free connections. Upgrade for unlimited, anonymous conversations whenever you need them.</p><div className="price"><b>₹1,000</b><span>/ month</span></div><ul><li>Unlimited daily connections</li><li>Cancel anytime</li><li>Your core experience stays private</li></ul><button className="primary wide" onClick={onUpgrade}>Upgrade securely <span>→</span></button><small>Free connections reset at midnight UTC.</small></section>; }
+function Paywall({onBack}:{onBack:()=>void}){ return <section className="paywall"><button className="back" onClick={onBack}>←</button><div className="pay-visual"><span>∞</span></div><span className="overline">COMING SOON</span><h1>More connections are on the way.</h1><p>You've used today's 10 free connections. We're building a way to offer more — it isn't ready yet, so there's nothing to buy here right now.</p><small>Your free connections reset at midnight UTC.</small></section>; }
