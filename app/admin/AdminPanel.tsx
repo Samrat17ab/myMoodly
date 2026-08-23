@@ -115,13 +115,17 @@ export default function AdminPanel() {
 
   const unban = async (email: string) => {
     setBusy(true);
+    setError("");
     try {
-      await fetch("/api/admin", {
+      const res = await fetch("/api/admin", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "unban", email }),
       });
+      if (!res.ok) { setError(`Could not unban ${email}. Try again.`); return; }
       setBans((prev) => prev?.filter((b) => b.email !== email) ?? null);
       setReports((prev) => prev?.map((r) => r.reported_email === email ? { ...r, banned_at: null } : r) ?? null);
+    } catch {
+      setError(`Could not unban ${email}. Try again.`);
     } finally {
       setBusy(false);
     }
@@ -129,12 +133,16 @@ export default function AdminPanel() {
 
   const unblock = async (blocker: string, blocked: string) => {
     setBusy(true);
+    setError("");
     try {
-      await fetch("/api/admin", {
+      const res = await fetch("/api/admin", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "unblock", blocker, blocked }),
       });
+      if (!res.ok) { setError("Could not remove that block. Try again."); return; }
       setBlocks((prev) => prev?.filter((b) => !(b.blocker_email === blocker && b.blocked_email === blocked)) ?? null);
+    } catch {
+      setError("Could not remove that block. Try again.");
     } finally {
       setBusy(false);
     }
