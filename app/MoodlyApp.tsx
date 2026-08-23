@@ -132,6 +132,9 @@ export default function MoodlyApp() {
   const [survey, setSurvey] = useState({ understood:"", change:"", partnerRating:"" });
   const [checkInId, setCheckInId] = useState("");
   const [ticketId, setTicketId] = useState("");
+  const [canRelax, setCanRelax] = useState(false);
+  const [relaxDismissed, setRelaxDismissed] = useState(false);
+  const [relaxRequesting, setRelaxRequesting] = useState(false);
   const [conversationId, setConversationId] = useState("");
   const [partnerName, setPartnerName] = useState("Anonymous partner");
   const [partnerEmotion, setPartnerEmotion] = useState("");
@@ -264,6 +267,8 @@ export default function MoodlyApp() {
           active = false;
           setToast("No match was found this time. You can try again.");
           navigate("mode");
+        } else {
+          setCanRelax(Boolean(data.canRelax));
         }
       } catch (error) {
         if (active) setToast(error instanceof Error ? error.message : "Could not check your match.");
@@ -513,6 +518,8 @@ export default function MoodlyApp() {
         languages:profile.languages,
       });
       setTicketId(String(match.ticketId));
+      setCanRelax(false);
+      setRelaxDismissed(false);
       setQueueSeconds(0);
       navigate("queue");
       if (match.status === "matched" && match.conversationId) {
@@ -535,6 +542,21 @@ export default function MoodlyApp() {
       navigate("mode");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not cancel matchmaking.");
+    }
+  };
+  const requestRelax = async () => {
+    if (relaxRequesting || !ticketId) return;
+    setRelaxRequesting(true);
+    try {
+      const result = await matchRequest({ action:"relax", ticketId, email });
+      setCanRelax(false);
+      if (result.status === "matched" && result.conversationId) {
+        scheduleMatchedChat(result);
+      }
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Could not widen your search.");
+    } finally {
+      setRelaxRequesting(false);
     }
   };
   const send = () => {
@@ -704,6 +726,13 @@ export default function MoodlyApp() {
         <p>We're searching for {mode === "similar" ? "someone in a similar emotional place":"a different, complementary headspace"}.</p>
         <div className="queue-card"><div><span>Your check-in</span><b>{emotion}</b></div><div><span>Looking for</span><b>{mode === "similar" ? "A similar feeling":"A different headspace"}</b></div></div>
         <small className="wait">Waiting {fmt(queueSeconds)} · Matching by mood and shared language</small>
+        {canRelax && !relaxDismissed && <div className="relax-banner">
+          <span>The kind of match you wanted isn&apos;t available right now, but others are waiting to connect.</span>
+          <div>
+            <button disabled={relaxRequesting} onClick={() => void requestRelax()}>{relaxRequesting ? "Connecting…" : "Yes, connect me"}</button>
+            <button className="text-button" disabled={relaxRequesting} onClick={() => setRelaxDismissed(true)}>No, keep waiting</button>
+          </div>
+        </div>}
         <button className="text-button cancel" onClick={() => void cancelQueue()}>Cancel search</button>
       </section>}
       {view === "chat" && <section className="chat-view">

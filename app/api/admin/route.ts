@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         totalUsers, newToday, newThisWeek,
         checkInsToday, matchesToday, matchesThisWeek, activeNow,
         totalReports, totalBans, totalBlocks, totalFeedback, totalDeleted,
-        avgSession, ratingRows, understoodRows, moodChangeRows, capHits,
+        avgSession, ratingRows, understoodRows, moodChangeRows, capHits, retention,
       ] = await d1.batch([
         d1.prepare("SELECT COUNT(*) AS n FROM profiles"),
         d1.prepare("SELECT COUNT(*) AS n FROM profiles WHERE created_at >= datetime('now', 'start of day')"),
@@ -59,6 +59,23 @@ export async function GET(request: Request) {
              WHERE created_at >= datetime('now', 'start of day')
              GROUP BY user_email HAVING COUNT(*) >= 10
            )`,
+        ),
+        // "Returned" = has any check-in strictly more than a day after their
+        // very first one -- standard next-day-or-later retention, filters
+        // out someone just re-checking-in in the same sitting.
+        d1.prepare(
+          `WITH first_checkins AS (
+             SELECT user_email, MIN(created_at) AS first_at
+             FROM check_ins GROUP BY user_email
+           )
+           SELECT
+             COUNT(*) AS total,
+             SUM(CASE WHEN EXISTS (
+               SELECT 1 FROM check_ins later
+               WHERE later.user_email = fc.user_email
+                 AND later.created_at > datetime(fc.first_at, '+1 day')
+             ) THEN 1 ELSE 0 END) AS returned
+           FROM first_checkins fc`,
         ),
       ]);
 
@@ -93,6 +110,8 @@ export async function GET(request: Request) {
         understoodBreakdown: understood,
         moodChangeBreakdown: moodChange,
         usersAtFreeCapToday: (capHits.results[0] as { n: number }).n,
+        returnedUsers: (retention.results[0] as { total: number; returned: number | null }).returned ?? 0,
+        totalUsersWithCheckIn: (retention.results[0] as { total: number; returned: number | null }).total,
       });
     }
 
@@ -128,7 +147,57 @@ export async function GET(request: Request) {
         )
         .all();
 
-      return Response.json({ pairs: pairs.results, byMode: byMode.results });
+      // Does how someone's *first* conversation went predict whether they
+      // come back at all? Ties each user's first-ever check-in to its
+      // survey (if they completed one) and checks for any later check-in.
+      const retentionByFirstOutcome = await d1
+        .prepare(
+          `WITH first_checkins AS (
+             SELECT ci.id AS check_in_id, ci.user_email, ci.created_at AS first_at
+             FROM check_ins ci
+             WHERE ci.created_at = (
+               SELECT MIN(created_at) FROM check_ins WHERE user_email = ci.user_email
+             )
+           )
+           SELECT
+             cs.mood_change,
+             COUNT(*) AS n,
+             SUM(CASE WHEN EXISTS (
+               SELECT 1 FROM check_ins later
+               WHERE later.user_email = fc.user_email
+                 AND later.created_at > datetime(fc.first_at, '+1 day')
+             ) THEN 1 ELSE 0 END) AS returned
+           FROM first_checkins fc
+           JOIN conversation_surveys cs ON cs.check_in_id = fc.check_in_id
+           WHERE cs.mood_change IS NOT NULL AND cs.mood_change != ''
+           GROUP BY cs.mood_change`,
+        )
+        .all();
+
+      // Compares outcomes for people who got their originally preferred
+      // pairing vs. people who accepted a relaxed one after ~60s of
+      // waiting -- see worker/realtime.ts's relax() for how that's tracked
+      // separately from a genuinely chosen "different" mode.
+      const byRelaxed = await d1
+        .prepare(
+          `SELECT
+             matched_relaxed,
+             COUNT(*) AS n,
+             SUM(CASE WHEN mood_change = 'Better' THEN 1 ELSE 0 END) AS better,
+             SUM(CASE WHEN mood_change = 'Same' THEN 1 ELSE 0 END) AS same,
+             SUM(CASE WHEN mood_change = 'Worse' THEN 1 ELSE 0 END) AS worse
+           FROM conversation_surveys
+           WHERE mood_change IS NOT NULL AND mood_change != ''
+           GROUP BY matched_relaxed`,
+        )
+        .all();
+
+      return Response.json({
+        pairs: pairs.results,
+        byMode: byMode.results,
+        retentionByFirstOutcome: retentionByFirstOutcome.results,
+        byRelaxed: byRelaxed.results,
+      });
     }
 
     if (view === "reports") {

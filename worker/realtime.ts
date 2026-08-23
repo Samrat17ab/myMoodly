@@ -26,6 +26,7 @@ type WaitingTicketRow = {
   match_mode: "similar" | "different";
   quadrant: "red" | "yellow" | "green" | "blue";
   languages: string;
+  relaxed_at: string | null;
 };
 
 const WAITING_TICKET_LIFETIME = "-2 minutes";
@@ -34,6 +35,9 @@ const LEGACY_CONVERSATION_LIFETIME = "-20 minutes";
 const MINIMUM_MATCH_WAIT_SECONDS = 3;
 const SYNCHRONIZED_CHAT_DELAY_SECONDS = 2;
 const CHAT_DURATION_SECONDS = 20 * 60;
+// How long a user waits with no match before we tell them their preferred
+// pairing isn't available and offer a broader one instead (see relax()).
+const RELAX_PROMPT_SECONDS = 60;
 // How often the Matchmaker's alarm sweeps stale tickets/conversations,
 // instead of that global sweep running on every single matchmaking request
 // (see Matchmaker's constructor and alarm() for why).
@@ -140,7 +144,8 @@ async function ensureRealtimeSchema(d1: D1Database) {
       status TEXT NOT NULL,
       conversation_id TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      relaxed_at TEXT
     )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY NOT NULL,
@@ -174,6 +179,20 @@ async function ensureRealtimeSchema(d1: D1Database) {
     ),
   ]);
   await ensureConversationsExpiryColumn(d1);
+  await ensureMatchmakingTicketsRelaxedColumn(d1);
+}
+
+// matchmaking_tickets predates relaxed_at, so existing deployments need it
+// added -- see ensureConversationsExpiryColumn just above for why this
+// can't just be an unconditional ALTER TABLE on every request.
+async function ensureMatchmakingTicketsRelaxedColumn(d1: D1Database) {
+  const columns = await d1
+    .prepare("PRAGMA table_info(matchmaking_tickets)")
+    .all<{ name: string }>();
+  const hasRelaxedAt = columns.results.some((column) => column.name === "relaxed_at");
+  if (hasRelaxedAt) return;
+
+  await d1.prepare("ALTER TABLE matchmaking_tickets ADD COLUMN relaxed_at TEXT").run();
 }
 
 // conversations predates expires_at, so existing deployments need it added
@@ -310,6 +329,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
     if (action === "join") return this.join(email, payload);
     if (action === "status") return this.status(email, payload);
     if (action === "cancel") return this.cancel(email, payload);
+    if (action === "relax") return this.relax(email, payload);
     return Response.json({ error: "Unknown matchmaking action" }, { status: 400 });
   }
 
@@ -405,6 +425,73 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
     await this.tryMatch(email, ticketId);
     const ticket = await this.env.DB
       .prepare(
+        `SELECT id, status, conversation_id, created_at, relaxed_at, languages
+         FROM matchmaking_tickets WHERE id = ? AND user_email = ? LIMIT 1`,
+      )
+      .bind(ticketId, email)
+      .first<TicketRow & { created_at: string; relaxed_at: string | null; languages: string }>();
+    if (!ticket) {
+      return Response.json({ error: "Matchmaking ticket not found" }, { status: 404 });
+    }
+
+    // Only worth telling the user their preferred pairing isn't available
+    // if it's genuinely true right now: they've waited a while, haven't
+    // already relaxed, and there's actually someone else (any mood) they
+    // could talk to instead -- otherwise there's nothing useful to offer.
+    let canRelax = false;
+    if (
+      ticket.status === "waiting" &&
+      !ticket.relaxed_at &&
+      Date.now() - parseSqliteTimestamp(ticket.created_at) >= RELAX_PROMPT_SECONDS * 1000
+    ) {
+      const broaderCandidate = await this.env.DB
+        .prepare(
+          `SELECT EXISTS (
+             SELECT 1 FROM matchmaking_tickets mt
+             WHERE mt.status = 'waiting'
+               AND mt.user_email <> ?
+               AND mt.created_at >= datetime('now', '-2 minutes')
+               AND mt.updated_at >= datetime('now', '-15 seconds')
+               AND EXISTS (
+                 SELECT 1 FROM json_each(mt.languages) candidate_language
+                 JOIN json_each(?) current_language
+                   ON lower(candidate_language.value) = lower(current_language.value)
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM blocks
+                 WHERE (blocker_email = ? AND blocked_email = mt.user_email)
+                    OR (blocker_email = mt.user_email AND blocked_email = ?)
+               )
+           ) AS found`,
+        )
+        .bind(email, ticket.languages, email, email)
+        .first<{ found: number }>();
+      canRelax = Boolean(broaderCandidate?.found);
+    }
+
+    const response = await ticketResponse(this.env.DB, ticket, email);
+    return Response.json({ ...response, canRelax });
+  }
+
+  // Gives up this ticket's own mood-pairing preference (matches with anyone
+  // compatible on language from here on) after the user has explicitly
+  // agreed to it via the canRelax prompt -- see status() above. The
+  // original match_mode/quadrant stay on the row untouched, so research
+  // analysis can still see what they actually wanted, separate from what
+  // they settled for.
+  private async relax(email: string, payload: Record<string, unknown>) {
+    const ticketId = typeof payload.ticketId === "string" ? payload.ticketId : "";
+    await this.env.DB
+      .prepare(
+        `UPDATE matchmaking_tickets
+         SET relaxed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND user_email = ? AND status = 'waiting' AND relaxed_at IS NULL`,
+      )
+      .bind(ticketId, email)
+      .run();
+    await this.tryMatch(email, ticketId);
+    const ticket = await this.env.DB
+      .prepare(
         `SELECT id, status, conversation_id FROM matchmaking_tickets
          WHERE id = ? AND user_email = ? LIMIT 1`,
       )
@@ -419,7 +506,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
   private async tryMatch(email: string, ticketId: string) {
     const current = await this.env.DB
       .prepare(
-        `SELECT id, user_email, match_mode, quadrant, languages
+        `SELECT id, user_email, match_mode, quadrant, languages, relaxed_at
          FROM matchmaking_tickets
          WHERE id = ?
            AND user_email = ?
@@ -431,9 +518,14 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
       .first<WaitingTicketRow>();
     if (!current) return;
 
+    // A relaxed ticket drops its own quadrant preference (matches anyone,
+    // any mood) but still has to satisfy the *candidate's* preference,
+    // unless the candidate has separately relaxed too -- relaxing only
+    // gives up your own criteria, it never overrides someone else's.
+    const currentRelaxed = current.relaxed_at !== null;
     const candidate = await this.env.DB
       .prepare(
-        `SELECT mt.id, mt.user_email, mt.match_mode, mt.quadrant, mt.languages
+        `SELECT mt.id, mt.user_email, mt.match_mode, mt.quadrant, mt.languages, mt.relaxed_at
          FROM matchmaking_tickets mt
          WHERE mt.status = 'waiting'
            AND mt.user_email <> ?
@@ -447,11 +539,13 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
                ON lower(candidate_language.value) = lower(current_language.value)
            )
            AND (
-             (? = 'similar' AND mt.quadrant = ?)
+             ? = 1
+             OR (? = 'similar' AND mt.quadrant = ?)
              OR (? = 'different' AND mt.quadrant <> ?)
            )
            AND (
-             (mt.match_mode = 'similar' AND mt.quadrant = ?)
+             mt.relaxed_at IS NOT NULL
+             OR (mt.match_mode = 'similar' AND mt.quadrant = ?)
              OR (mt.match_mode = 'different' AND mt.quadrant <> ?)
            )
            AND NOT EXISTS (
@@ -466,6 +560,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
         email,
         MINIMUM_MATCH_WAIT_SECONDS,
         current.languages,
+        currentRelaxed ? 1 : 0,
         current.match_mode,
         current.quadrant,
         current.match_mode,

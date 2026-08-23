@@ -21,6 +21,8 @@ type Overview = {
   understoodBreakdown: Record<string, number>;
   moodChangeBreakdown: Record<string, number>;
   usersAtFreeCapToday: number;
+  returnedUsers: number;
+  totalUsersWithCheckIn: number;
 };
 type ReportRow = {
   reported_email: string;
@@ -39,7 +41,9 @@ type MoodPairRow = {
   better: number; same: number; worse: number; understood_yes: number; rating_great: number;
 };
 type ModeRow = { match_mode: string; n: number; better: number; same: number; worse: number };
-type MoodPairsData = { pairs: MoodPairRow[]; byMode: ModeRow[] };
+type RetentionRow = { mood_change: string; n: number; returned: number };
+type RelaxedRow = { matched_relaxed: number; n: number; better: number; same: number; worse: number };
+type MoodPairsData = { pairs: MoodPairRow[]; byMode: ModeRow[]; retentionByFirstOutcome: RetentionRow[]; byRelaxed: RelaxedRow[] };
 
 const TABS = ["Overview", "Mood patterns", "Reports", "Bans", "Blocks", "Feedback", "Deleted accounts"] as const;
 type Tab = typeof TABS[number];
@@ -173,6 +177,7 @@ export default function AdminPanel() {
           <StatCard label="Active chats right now" value={overview.activeConversationsNow} />
           <StatCard label="Avg. chat length" value={formatSeconds(overview.avgSessionSeconds)} />
           <StatCard label="Hit free daily cap today" value={overview.usersAtFreeCapToday} />
+          <StatCard label="Returned (next day or later)" value={pct(overview.returnedUsers, overview.totalUsersWithCheckIn)} />
           <StatCard label="Total reports filed" value={overview.totalReports} />
           <StatCard label="Accounts banned" value={overview.totalBans} />
           <StatCard label="Active blocks" value={overview.totalBlocks} />
@@ -220,6 +225,40 @@ export default function AdminPanel() {
                     <td>{pct(m.better, m.n)}</td>
                     <td>{pct(m.same, m.n)}</td>
                     <td>{pct(m.worse, m.n)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <h3 className="admin-subhead">Do people come back? (by how their first conversation went)</h3>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>First conversation felt...</th><th>N</th><th>Returned next day or later</th></tr></thead>
+              <tbody>
+                {moodPairs.retentionByFirstOutcome.length === 0 && <tr><td colSpan={3} className="admin-empty">Not enough data yet.</td></tr>}
+                {moodPairs.retentionByFirstOutcome.map((r) => (
+                  <tr key={r.mood_change}>
+                    <td className="admin-cap">{r.mood_change}</td>
+                    <td>{r.n}</td>
+                    <td>{pct(r.returned, r.n)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <h3 className="admin-subhead">Preferred pairing vs. settled for a relaxed match</h3>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Match type</th><th>N</th><th>Better</th><th>Same</th><th>Worse</th></tr></thead>
+              <tbody>
+                {moodPairs.byRelaxed.length === 0 && <tr><td colSpan={5} className="admin-empty">Not enough data yet.</td></tr>}
+                {moodPairs.byRelaxed.map((r) => (
+                  <tr key={r.matched_relaxed}>
+                    <td>{r.matched_relaxed ? "Settled (accepted a relaxed match)" : "Got preferred pairing"}</td>
+                    <td>{r.n}</td>
+                    <td>{pct(r.better, r.n)}</td>
+                    <td>{pct(r.same, r.n)}</td>
+                    <td>{pct(r.worse, r.n)}</td>
                   </tr>
                 ))}
               </tbody>

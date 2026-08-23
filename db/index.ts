@@ -46,6 +46,7 @@ async function ensureConversationSurveyColumns(d1: D1Database) {
     ["gender", "TEXT"],
     ["chat_session_seconds", "INTEGER"],
     ["partner_rating", "TEXT"],
+    ["matched_relaxed", "INTEGER"],
   ] as const;
 
   const missingMood = moodColumns.filter(([name]) => !existing.has(name));

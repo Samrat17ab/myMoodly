@@ -265,7 +265,8 @@ export async function POST(request: Request) {
           d1
             .prepare(
               `SELECT other_ci.quadrant AS quadrant, other_ci.emotion AS emotion,
-                      other_mt.user_email AS partner_email
+                      other_mt.user_email AS partner_email,
+                      mt.relaxed_at IS NOT NULL AS was_relaxed
                FROM matchmaking_tickets mt
                JOIN matchmaking_tickets other_mt
                  ON other_mt.conversation_id = mt.conversation_id
@@ -298,7 +299,7 @@ export async function POST(request: Request) {
         | undefined;
       if (!ownCheckIn) return jsonError("Check-in not found", 404);
       const partnerCheckIn = partnerCheckInResult.results[0] as
-        | { quadrant: string; emotion: string; partner_email: string | null }
+        | { quadrant: string; emotion: string; partner_email: string | null; was_relaxed: number }
         | undefined;
       const profile = profileResult.results[0] as
         | { age: number; gender: string }
@@ -311,8 +312,8 @@ export async function POST(request: Request) {
           `INSERT INTO conversation_surveys
             (id, check_in_id, user_email, understood, mood_change,
              mood_quadrant, mood_emotion, matched_mood_quadrant, matched_mood_emotion,
-             age, gender, chat_session_seconds, partner_rating)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             age, gender, chat_session_seconds, partner_rating, matched_relaxed)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -328,6 +329,7 @@ export async function POST(request: Request) {
           profile?.gender ?? null,
           session?.seconds ?? null,
           partnerRating,
+          partnerCheckIn?.was_relaxed ?? 0,
         )
         .run();
 
