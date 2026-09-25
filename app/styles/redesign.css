@@ -504,6 +504,102 @@
   color: var(--pine);
 }
 
+/* --- Waiting --- */
+.waiting-view {
+  min-height: calc(100vh - 74px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-6);
+  gap: var(--space-2);
+}
+.waiting-breath-line {
+  font-family: var(--font-family-display);
+  font-style: italic;
+  color: var(--sage);
+  margin: var(--space-3) 0 var(--space-5);
+}
+.waiting-view h2 {
+  font-family: var(--font-family-display);
+  font-weight: 500;
+  font-size: var(--text-2xl);
+  margin: 0 0 var(--space-2);
+}
+.waiting-reassurance {
+  max-width: 380px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  min-height: 1.6em;
+}
+
+/* --- Chat --- */
+.chat-ring {
+  transform: rotate(-90deg);
+}
+.chat-ring-track {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2.5;
+}
+.chat-ring-fill {
+  fill: none;
+  stroke: var(--sage);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear, stroke 0.4s ease;
+}
+.chat-ring.is-warm .chat-ring-fill {
+  stroke: var(--dusk);
+}
+.chat-checkins {
+  display: flex;
+  gap: var(--space-3);
+  margin: var(--space-4) 8%;
+}
+.chat-checkins .chat-note {
+  flex: 1;
+  margin: 0;
+}
+.icebreakers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 420px;
+  margin: 0 auto var(--space-5);
+}
+.icebreakers button {
+  text-align: left;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--line);
+  background: var(--mist);
+  font-size: var(--text-sm);
+  color: var(--pine-deep);
+}
+.composer {
+  grid-template-columns: 1fr 38px;
+}
+
+/* --- Closing reflection --- */
+.mood-reflection {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-7);
+  margin: var(--space-5) 0;
+}
+.mood-reflection > div {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+}
+.mood-reflection small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  max-width: 120px;
+}
+
 /* --- Sign-in --- */
 .auth-art {
   position: relative;

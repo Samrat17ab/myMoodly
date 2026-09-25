@@ -8,6 +8,10 @@ import { Brand } from "@/app/components/shared/Brand";
 import { Landing } from "@/app/components/screens/Landing";
 import { SignIn } from "@/app/components/screens/SignIn";
 import { Home } from "@/app/components/screens/Home";
+import { Waiting } from "@/app/components/screens/Waiting";
+import { Chat } from "@/app/components/screens/Chat";
+import { ClosingReflection } from "@/app/components/screens/ClosingReflection";
+import { Modal } from "@/app/components/shared/Modal";
 import { MoodMapStep } from "@/app/components/screens/checkin/MoodMapStep";
 import { WordPickerStep } from "@/app/components/screens/checkin/WordPickerStep";
 import { QuadrantFallbackStep } from "@/app/components/screens/checkin/QuadrantFallbackStep";
@@ -138,7 +142,6 @@ export default function MoodlyApp() {
   const [extendRequestedByPartner, setExtendRequestedByPartner] = useState(false);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [menu, setMenu] = useState(false);
   const [report, setReport] = useState(false);
   const [reportDone, setReportDone] = useState(false);
   const [reportSending, setReportSending] = useState(false);
@@ -400,7 +403,7 @@ export default function MoodlyApp() {
     };
   }, [view, conversationId, navigate]);
 
-  const openOverlay = (v: View) => { navigate(v); setMenu(false); };
+  const openOverlay = (v: View) => { navigate(v); };
   const goBack = useCallback(() => {
     if (historyPushesRef.current > 0) {
       historyPushesRef.current -= 1;
@@ -618,7 +621,6 @@ export default function MoodlyApp() {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type:"end" }));
     }
-    setMenu(false);
     navigate("survey");
   };
   const submitReport = async (reason: string) => {
@@ -644,6 +646,10 @@ export default function MoodlyApp() {
     }
   };
   const moodPoint = { pleasant: pleasant === false ? 0 : 1, energy: energy === "low" ? 0 : 1 };
+  const partnerQuadrant = (Object.entries(words) as [Quadrant, string[]][]).find(([, list]) => list.includes(partnerEmotion))?.[0];
+  const partnerMoodPoint = partnerQuadrant
+    ? { pleasant: partnerQuadrant === "yellow" || partnerQuadrant === "green" ? 1 : 0, energy: partnerQuadrant === "red" || partnerQuadrant === "yellow" ? 1 : 0 }
+    : { pleasant: 0.5, energy: 0.5 };
   const fmt = (s:number) => `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
   const partnerInitials = partnerName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
   const messageTime = (value:string) => {
@@ -724,43 +730,62 @@ export default function MoodlyApp() {
         </AnimatePresence>
         </div>
       )}
-      {view === "queue" && <section className="queue-view">
-        <div className="pulse-ring"><div><span>⌁</span></div></div>
-        <span className="overline">LOOKING FOR A CONNECTION</span><h2>Finding someone who fits…</h2>
-        <p>We're searching for {mode === "similar" ? "someone in a similar emotional place":"a different, complementary headspace"}.</p>
-        <div className="queue-card"><div><span>Your check-in</span><b>{emotion}</b></div><div><span>Looking for</span><b>{mode === "similar" ? "A similar feeling":"A different headspace"}</b></div></div>
-        <small className="wait">Waiting {fmt(queueSeconds)} · Matching by mood and shared language</small>
-        {canRelax && !relaxDismissed && <div className="relax-banner">
-          <span>The kind of match you wanted isn&apos;t available right now, but others are waiting to connect.</span>
-          <div>
-            <button disabled={relaxRequesting} onClick={() => void requestRelax()}>{relaxRequesting ? "Connecting…" : "Yes, connect me"}</button>
-            <button className="text-button" disabled={relaxRequesting} onClick={() => setRelaxDismissed(true)}>No, keep waiting</button>
-          </div>
-        </div>}
-        <button className="text-button cancel" onClick={() => void cancelQueue()}>Cancel search</button>
-      </section>}
-      {view === "chat" && <section className="chat-view">
-        <header className="chat-header"><Brand/><div className="partner"><span className="avatar">{partnerInitials}</span><div><b>{partnerName}</b><small><i/> {onlineCount >= 2 ? "Here with you" : socketStatus === "live" ? "Connected" : "Reconnecting…"}</small></div></div><div className="chat-actions"><div className="timer">◷ {fmt(chatSeconds)}</div><button onClick={() => setMenu(!menu)}>•••</button>{menu && <div className="chat-menu"><button onClick={() => setReport(true)}>⚑ Report conversation</button><button onClick={() => void submitBlock()}>⊘ Block this person</button><button onClick={endChat}>↗ End conversation</button></div>}</div></header>
-        {chatSeconds > 0 && chatSeconds <= 60 && <div className="extend-banner">
-          {extendRequestedByMe && extendRequestedByPartner ? <span>Extending your conversation…</span>
-            : extendRequestedByMe ? <span>Waiting for {partnerName} to agree to keep chatting…</span>
-            : extendRequestedByPartner ? <><span>{partnerName} wants to keep chatting.</span><button onClick={requestExtend}>Yes, continue</button></>
-            : <><span>1 minute left — keep chatting?</span><button onClick={requestExtend}>Yes, continue</button></>}
-        </div>}
-        <div className="chat-note"><span>{partnerName}'s check-in</span><b>{partnerEmotion || "Shared privately"}</b>{partnerNote && <p>“{partnerNote}”</p>}</div>
-        <div className="messages"><div className="system-note">You're both anonymous. Messages are delivered live and saved securely for this conversation.</div>{messages.map(m => <div key={m.id} className={`bubble-row ${m.mine?"mine":""}`}><div className="bubble">{m.text}<time>{messageTime(m.time)}</time></div></div>)}</div>
-        <div className="composer"><button aria-label="Conversation guidance">＋</button><input value={message} onChange={e => setMessage(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Say what's on your mind…"/><button className="send" onClick={send}>↑</button></div>
-        <footer className="chat-footer"><button onClick={() => openOverlay("resources")}>♡ Need help now?</button><span>{socketStatus === "live" ? "Live · Messages saved to this conversation" : "Reconnecting securely…"}</span></footer>
-        {report && <Modal title={reportDone ? "Report received":"Report conversation"} onClose={() => { if (!reportSending) { setReport(false); setReportDone(false); } }}>{reportDone ? <><p>Thank you. Your report was recorded and this person won't be matched with you again.</p><button className="primary wide" onClick={() => { setReport(false); setReportDone(false); endChat(); }}>Continue</button></>:<><p className="modal-copy">What happened? Your report is private and recorded against this person's account.</p><div className="report-list">{["Harassment or bullying","Sexual content","Hate or discrimination","Sharing personal information","Something else"].map(x => <button key={x} disabled={reportSending} onClick={() => void submitReport(x)}>{x}<span>→</span></button>)}</div></>}</Modal>}
-      </section>}
-      {view === "survey" && <section className="panel compact-panel survey-panel">
-        <div className="survey-art">⌁</div><span className="overline">CONVERSATION COMPLETE</span><h2>How did that feel?</h2><p>Your answer helps us make future matches better.</p>
-        <SurveyQuestion label="Did you feel understood in this conversation?" options={["Yes","Somewhat","No"]} value={survey.understood} onChange={v => setSurvey({...survey,understood:v})}/>
-        <SurveyQuestion label="How do you feel compared to before?" options={["Better","Same","Worse"]} value={survey.change} onChange={v => setSurvey({...survey,change:v})}/>
-        <SurveyQuestion label="How was this match?" options={["Great","Okay","Not for me"]} value={survey.partnerRating} onChange={v => setSurvey({...survey,partnerRating:v})}/>
-        <button className="primary wide" onClick={() => void submitSurvey()}>Submit response</button>
-        <button className="text-button skip" onClick={() => navigate("home")}>Skip for now</button>
-      </section>}
+      {view === "queue" && (
+        <Waiting
+          emotion={emotion}
+          mode={mode}
+          mood={moodPoint}
+          elapsedLabel={fmt(queueSeconds)}
+          canRelax={canRelax}
+          relaxDismissed={relaxDismissed}
+          relaxRequesting={relaxRequesting}
+          onRelax={() => void requestRelax()}
+          onDismissRelax={() => setRelaxDismissed(true)}
+          onCancel={() => void cancelQueue()}
+        />
+      )}
+      {view === "chat" && (
+        <Chat
+          partnerName={partnerName}
+          partnerInitials={partnerInitials}
+          partnerMood={partnerMoodPoint}
+          partnerEmotion={partnerEmotion}
+          partnerNote={partnerNote}
+          myEmotion={emotion}
+          myNote={note}
+          mode={mode}
+          onlineCount={onlineCount}
+          socketStatus={socketStatus}
+          chatSeconds={chatSeconds}
+          extendRequestedByMe={extendRequestedByMe}
+          extendRequestedByPartner={extendRequestedByPartner}
+          onRequestExtend={requestExtend}
+          message={message}
+          setMessage={setMessage}
+          onSend={send}
+          messages={messages}
+          messageTime={messageTime}
+          onEndChat={endChat}
+          onSubmitBlock={() => void submitBlock()}
+          onHelp={() => openOverlay("resources")}
+          report={report}
+          reportDone={reportDone}
+          reportSending={reportSending}
+          onOpenReport={() => setReport(true)}
+          onCloseReport={() => { if (!reportSending) { setReport(false); setReportDone(false); } }}
+          onSubmitReport={(reason) => void submitReport(reason)}
+        />
+      )}
+      {view === "survey" && (
+        <ClosingReflection
+          emotion={emotion}
+          beforeMood={moodPoint}
+          survey={survey}
+          setSurvey={setSurvey}
+          onSubmit={() => void submitSurvey()}
+          onSkip={() => navigate("home")}
+        />
+      )}
       {view === "paywall" && <Paywall onBack={() => navigate("home")}/>}
       {view === "resources" && <Resources country={profile.country} onBack={goBack}/>}
       {view === "guide" && <Guide onBack={goBack}/>}
@@ -772,8 +797,6 @@ export default function MoodlyApp() {
 
 function AppHeader({email,nickname,onHome,onGuide,onHelp,onSettings}:{email:string,nickname:string,onHome:()=>void,onGuide:()=>void,onHelp:()=>void,onSettings:()=>void}){ return <header className="app-header"><button onClick={onHome}><Brand/></button><div className="app-nav"><button onClick={onGuide}>? <b>Guide</b></button><button className="help-now" onClick={onHelp}>♡ Need help now?</button><button className="mini-avatar" onClick={onSettings} title="Account settings">{initialsFor(nickname, email)}</button></div></header>; }
 function Onboarding({profile,setProfile,onDone,toast}:{profile:Profile,setProfile:(p:Profile)=>void,onDone:()=>void,toast:string}){ const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]}); return <main className="onboard-shell"><header><Brand/><span>Private setup · About 1 minute</span></header><section className="onboard-card"><span className="overline">YOUR PRIVATE PROFILE</span><h1>Just enough to keep myMoodly safe.</h1><p>This information is never shown to anyone you match with.</p><div className="form-grid"><label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label><label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>{profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}<label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset></div><label className="check"><input type="checkbox" checked={profile.terms} onChange={e=>setProfile({...profile,terms:e.target.checked})}/><span>I agree to the <Link href="/terms">Terms & Conditions</Link> and acknowledge the <Link href="/privacy">Privacy Policy</Link>. I understand myMoodly is 18+, anonymous but reportable, and not a crisis service.</span></label><button className="primary wide" onClick={onDone}>Complete setup <span>→</span></button></section>{toast&&<div className="toast">{toast}</div>}<button className="help-pill" onClick={()=>{}}>♡ Need help now?</button></main>; }
-function SurveyQuestion({label,options,value,onChange}:{label:string,options:string[],value:string,onChange:(v:string)=>void}){ return <div className="survey-q"><b>{label}</b><div>{options.map(o=><button className={value===o?"active":""} key={o} onClick={()=>onChange(o)}>{o}</button>)}</div></div>; }
-function Modal({title,onClose,children}:{title:string,onClose:()=>void,children:React.ReactNode}){ return <div className="modal-bg"><div className="modal"><button className="modal-close" onClick={onClose}>×</button><h2>{title}</h2>{children}</div></div>; }
 function Resources({country,onBack}:{country:string,onBack:()=>void}){ return <section className="resource-view"><button className="back" onClick={onBack}>←</button><div className="resource-head"><span>♡</span><div><small>IMMEDIATE SUPPORT</small><h1>Need help right now?</h1><p>myMoodly isn't a crisis service, but you don't have to face this moment alone.</p></div></div><div className="resource-layout"><div><h3>Emergency contacts for {country}</h3>{country==="Nepal"?<><ResourceCard title="National Suicide Prevention Helpline" number="1166" note="Free, nationwide support"/><ResourceCard title="Police emergency" number="100" note="For immediate danger"/><ResourceCard title="Ambulance" number="102" note="Emergency medical support"/></>:<><ResourceCard title="Local emergency services" number="112 / 911" note="Use the number available in your country"/><ResourceCard title="Find a crisis centre" number="findahelpline.com" note="Verified helplines in 175+ countries"/></>}<p className="resource-foot">If a number doesn't connect, call your local emergency service or go to the nearest emergency department.</p></div><aside><h3>While you reach out</h3><p>Move to a place where other people are nearby.</p><p>Put distance between you and anything you could use to hurt yourself.</p><p>Text or call someone you trust and say: “I need you with me right now.”</p></aside></div></section>; }
 function ResourceCard({title,number,note}:{title:string,number:string,note:string}){ return <div className="resource-card"><span>☎</span><div><b>{title}</b><small>{note}</small></div><a href={number.match(/^\d/) ? `tel:${number.replace(/\D/g,"")}`:`https://${number}`}>{number}</a></div>; }
 function Guide({onBack}:{onBack:()=>void}){ const items=[["01","Name what you feel","Two quick questions guide you to one of 100 precise emotion words."],["02","Choose your intention","Talk with someone who feels similar, or someone in a different headspace."],["03","Meet anonymously","You're matched by mood and shared language — never by country, age, or gender."],["04","Talk for 20 minutes","A quiet timer keeps things contained. Continue only when you both agree."],["05","Stay in control","Report or block at any time. Emergency resources are always one tap away."]]; return <section className="guide-view"><button className="back" onClick={onBack}>←</button><span className="overline">HOW MYMOODLY WORKS</span><h1>A small check-in.<br/>A real human moment.</h1><div className="guide-grid">{items.map(x=><div key={x[0]}><i>{x[0]}</i><b>{x[1]}</b><p>{x[2]}</p></div>)}</div><div className="guide-limit"><b>10 conversations a day are free.</b><span></span></div></section>; }

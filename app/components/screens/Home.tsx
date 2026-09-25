@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Moodlight } from "@/app/components/shared/Moodlight";
 import { IconPlay } from "@/app/components/icons";
+import { useBreathingCycle } from "@/app/hooks/useBreathingCycle";
 
 function greeting(hour: number) {
   if (hour < 5) return "You're up late.";
@@ -11,13 +12,11 @@ function greeting(hour: number) {
   return "Good evening.";
 }
 
-const BREATHE_IN_MS = 4000;
-const BREATHE_OUT_MS = 6000;
 const GUIDED_BREATH_SECONDS = 60;
 
 export function Home({ usage, onStart, onGuide }: { usage: number; onStart: () => void; onGuide: () => void }) {
   const [hour, setHour] = useState(12); // safe default until the client corrects it
-  const [breathingIn, setBreathingIn] = useState(true);
+  const breathingIn = useBreathingCycle();
   // null = no guided breath running; otherwise seconds remaining.
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
@@ -25,11 +24,6 @@ export function Home({ usage, onStart, onGuide }: { usage: number; onStart: () =
     const readClientHour = () => setHour(new Date().getHours());
     readClientHour();
   }, []);
-
-  useEffect(() => {
-    const id = setTimeout(() => setBreathingIn((v) => !v), breathingIn ? BREATHE_IN_MS : BREATHE_OUT_MS);
-    return () => clearTimeout(id);
-  }, [breathingIn]);
 
   useEffect(() => {
     if (secondsLeft === null || secondsLeft <= 0) return;

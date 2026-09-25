@@ -98,9 +98,10 @@ test("matching requires a live queue heartbeat and chats expire", async () => {
 });
 
 test("matches wait three seconds and share partner check-ins", async () => {
-  const [realtime, app, loadTest] = await Promise.all([
+  const [realtime, app, chatScreen, loadTest] = await Promise.all([
     readFile(projectFile("worker/realtime.ts"), "utf8"),
     readFile(projectFile("app/MoodlyApp.tsx"), "utf8"),
+    readFile(projectFile("app/components/screens/Chat.tsx"), "utf8"),
     readFile(projectFile("tests/matchmaking-50-users.mjs"), "utf8"),
   ]);
 
@@ -110,7 +111,9 @@ test("matches wait three seconds and share partner check-ins", async () => {
   assert.match(realtime, /partnerNote:/);
   assert.match(realtime, /chatStartsAt:/);
   assert.match(app, /scheduleMatchedChat/);
-  assert.match(app, /partnerName}'s check-in/);
+  // The chat UI lives in its own component (app/components/screens/Chat.tsx).
+  assert.match(chatScreen, /partnerName/);
+  assert.match(chatScreen, /check-in/);
   assert.match(loadTest, /length: 50/);
   assert.match(loadTest, /conversations\.size, 25/);
 });
