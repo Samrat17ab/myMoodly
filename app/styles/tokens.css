@@ -1,0 +1,64 @@
+/* Design tokens for the myMoodly redesign. Additive to the legacy variables in
+   globals.css :root — screens migrate to these as they're redesigned, so both
+   sets coexist until every screen has moved over. */
+:root {
+  /* Brand palette */
+  --pine: #1e4d43;
+  --pine-deep: #123730;
+  --sage: #8fb3a3;
+  --mist: #eef3ef;
+  --lichen: #e6e1d2;
+  --dusk: #c49a93;
+  --night: #0f1d21;
+
+  /* Mood-blend colors (quadrant corners of the mood map) */
+  --mood-pleasant-high: #e8c98a; /* yellow quadrant */
+  --mood-pleasant-low: #a9c9b4; /* green quadrant */
+  --mood-unpleasant-high: #d9a08c; /* red quadrant */
+  --mood-unpleasant-low: #9db0c4; /* blue quadrant */
+
+  /* Typography */
+  --font-family-display: var(--font-display), Georgia, serif;
+  --font-family-body: var(--font-body), Arial, sans-serif;
+  --text-scale-ratio: 1.25;
+  --text-xs: clamp(0.7rem, 0.68rem + 0.1vw, 0.75rem);
+  --text-sm: clamp(0.8rem, 0.78rem + 0.1vw, 0.875rem);
+  --text-md: clamp(1.0625rem, 1rem + 0.2vw, 1.125rem); /* 17-18px body */
+  --text-lg: clamp(1.25rem, 1.15rem + 0.4vw, 1.4rem);
+  --text-xl: clamp(1.6rem, 1.4rem + 0.9vw, 1.95rem);
+  --text-2xl: clamp(2rem, 1.7rem + 1.4vw, 2.6rem);
+  --text-3xl: clamp(2.6rem, 2.1rem + 2.2vw, 3.6rem);
+  --text-4xl: clamp(3.4rem, 2.6rem + 3.6vw, 5.2rem);
+  --leading-body: 1.6;
+  --measure: 68ch;
+
+  /* Radii — hierarchy, not one radius everywhere */
+  --radius-sm: 10px; /* chips */
+  --radius-md: 18px; /* choice tiles, cards */
+  --radius-lg: 32px; /* sheets, composer */
+  --radius-pill: 999px;
+
+  /* Spacing (4px base grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Motion */
+  --dur-micro: 200ms;
+  --dur-transition: 550ms;
+  --dur-ambient: 8s;
+  --ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Focus */
+  --focus-ring: 0 0 0 3px rgba(30, 77, 67, 0.35);
+}
+
+:root[data-scene-theme="night"] {
+  --mist: var(--night);
+  --pine-deep: #eaf2ee;
+}
