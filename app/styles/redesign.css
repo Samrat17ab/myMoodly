@@ -1,0 +1,421 @@
+/* Redesign styles — grows phase by phase as screens are rebuilt. Legacy
+   classes not yet touched keep using globals.css until their screen lands. */
+
+.dot-bullet {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+  margin-right: 6px;
+}
+
+/* --- Mood map field --- */
+.mood-map {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+.mood-map-axis {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.mood-map-axis-energy {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 100%;
+  padding-right: 2px;
+}
+.mood-map-axis-pleasant {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+.mood-map-field {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  touch-action: none;
+  cursor: grab;
+  overflow: hidden;
+}
+.mood-map-field:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.mood-map-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* --- Quadrant tiles (accessible fallback) --- */
+.quadrant-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  max-width: 460px;
+  margin: 0 auto;
+}
+.quadrant-tiles button {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  text-align: left;
+  display: grid;
+  gap: 6px;
+}
+.quadrant-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+.quadrant-tiles small {
+  color: var(--muted);
+}
+
+/* --- Landing --- */
+.landing-shell {
+  position: relative;
+}
+.landing-hero {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.landing-hero-content {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+/* Scrim so hero text stays WCAG-AA legible against any scene, including the
+   lighter day-family gradients. */
+.landing-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(115deg, rgba(9, 20, 18, 0.72) 0%, rgba(9, 20, 18, 0.42) 45%, rgba(9, 20, 18, 0.05) 75%);
+  pointer-events: none;
+}
+.landing-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-6) 5.5vw 0;
+  color: #fff;
+}
+.landing-nav .text-button {
+  color: #fff;
+  border: 1px solid #ffffff40;
+  border-radius: var(--radius-pill);
+  padding: 10px 19px;
+}
+.landing-hero-copy {
+  color: #fff;
+  padding: 10vh 9vw 0;
+  max-width: 640px;
+}
+.landing-hero-copy .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-xs);
+  letter-spacing: 1.2px;
+  color: #eaf2ee;
+}
+.landing-hero-copy .eyebrow span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sage);
+}
+.landing-hero-copy h1 {
+  font-family: var(--font-family-display);
+  font-size: var(--text-4xl);
+  line-height: 0.98;
+  letter-spacing: -2px;
+  font-weight: 500;
+  margin: var(--space-4) 0;
+}
+.landing-hero-copy h1 em {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--sage);
+}
+.landing-hero-copy > div > p {
+  font-size: var(--text-lg);
+  max-width: 540px;
+  color: #eef3efdd;
+  line-height: var(--leading-body);
+}
+.landing-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+  flex-wrap: wrap;
+}
+.landing-hero-actions .quiet {
+  color: #fff;
+  text-underline-offset: 4px;
+}
+.trust-row {
+  list-style: none;
+  display: flex;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+  padding: 0;
+  color: #dce9e2;
+  font-size: var(--text-xs);
+}
+.landing-moodlight {
+  position: absolute;
+  right: 8vw;
+  top: 16vh;
+  z-index: 1;
+}
+.landing-feelings {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.drifting-feeling {
+  position: absolute;
+  bottom: 8%;
+  color: #ffffffb0;
+  font-family: var(--font-family-display);
+  font-style: italic;
+  font-size: var(--text-lg);
+}
+.landing-help-pill {
+  position: fixed;
+  z-index: 8;
+  bottom: 26px;
+  right: 30px;
+  border: 1px solid #ffffff40;
+  background: #00000030;
+  backdrop-filter: blur(10px);
+  color: #fff;
+  padding: 11px 16px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.landing-section {
+  padding: var(--space-8) max(6vw, 24px);
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.landing-section-head {
+  max-width: 640px;
+  margin: 0 auto var(--space-6);
+  text-align: center;
+}
+.landing-section-head h2 {
+  font-family: var(--font-family-display);
+  font-size: var(--text-2xl);
+  font-weight: 500;
+  letter-spacing: -0.5px;
+}
+.landing-section-head p {
+  color: var(--muted);
+  line-height: var(--leading-body);
+}
+
+.how-it-works-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-6);
+  position: relative;
+}
+.how-it-works-steps::before {
+  content: "";
+  position: absolute;
+  top: 22px;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: var(--line);
+}
+.how-it-works-steps li {
+  position: relative;
+}
+.how-it-works-steps span {
+  display: block;
+  font-family: var(--font-family-display);
+  font-size: var(--text-xl);
+  color: var(--sage);
+  background: var(--paper);
+  width: fit-content;
+  padding-right: 12px;
+}
+.how-it-works-steps h3 {
+  font-family: var(--font-family-display);
+  font-weight: 500;
+  margin: var(--space-2) 0 6px;
+}
+.how-it-works-steps p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.try-it-panel {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  background: linear-gradient(180deg, var(--mist), #fff);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7) var(--space-5);
+}
+.try-it-readout {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.privacy-list {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 720px;
+  display: grid;
+  gap: var(--space-4);
+}
+.privacy-list li {
+  padding-left: 28px;
+  position: relative;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.privacy-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pine);
+}
+
+.what-it-is blockquote {
+  margin: 0 auto;
+  max-width: 640px;
+  text-align: center;
+  font-family: var(--font-family-display);
+  font-size: var(--text-xl);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--pine-deep);
+}
+
+.faq-list {
+  max-width: 700px;
+  margin: 0 auto;
+  display: grid;
+  gap: var(--space-2);
+}
+.faq-item {
+  border-bottom: 1px solid var(--line);
+  padding: var(--space-3) 0;
+}
+.faq-item button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  font-weight: 650;
+  font-size: var(--text-md);
+}
+.faq-item p {
+  margin-top: var(--space-2);
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.landing-footer {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-6) 24px var(--space-8);
+  font-size: var(--text-sm);
+}
+.landing-footer a,
+.landing-footer button {
+  color: var(--muted);
+}
+
+/* --- Sign-in --- */
+.auth-art {
+  position: relative;
+  padding: 0;
+}
+.auth-art-content {
+  position: relative;
+  z-index: 2;
+  padding: 36px 6vw;
+  color: white;
+  height: 100%;
+}
+.auth-reassurance {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: var(--space-3);
+}
+.auth-form-back {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  /* .auth-art (with the only other back button) is hidden at this width. */
+  .auth-form-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: static;
+    margin-bottom: var(--space-5);
+  }
+  .landing-hero-copy {
+    padding: 12vh 24px 0;
+  }
+  .landing-moodlight {
+    display: none;
+  }
+  .how-it-works-steps {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+  .how-it-works-steps::before {
+    display: none;
+  }
+  .quadrant-tiles {
+    grid-template-columns: 1fr;
+  }
+}

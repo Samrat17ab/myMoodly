@@ -20,9 +20,10 @@ test("build emits the Moodly client stylesheet", async () => {
 });
 
 test("uses secure email and Google authentication instead of the demo login", async () => {
-  const [app, requestRoute, verifyRoute, sessionRoute, googleStart, googleCallback, accessAuth, smtp] =
+  const [app, signInScreen, requestRoute, verifyRoute, sessionRoute, googleStart, googleCallback, accessAuth, smtp] =
     await Promise.all([
       readFile(projectFile("app/MoodlyApp.tsx"), "utf8"),
+      readFile(projectFile("app/components/screens/SignIn.tsx"), "utf8"),
       readFile(projectFile("app/api/auth/request-code/route.ts"), "utf8"),
       readFile(projectFile("app/api/auth/verify-otp/route.ts"), "utf8"),
       readFile(projectFile("app/api/auth/session/route.ts"), "utf8"),
@@ -31,14 +32,17 @@ test("uses secure email and Google authentication instead of the demo login", as
       readFile(projectFile("worker/access-auth.ts"), "utf8"),
       readFile(projectFile("worker/smtp.ts"), "utf8"),
     ]);
+  // The sign-in UI lives in its own component (app/components/screens/SignIn.tsx);
+  // MoodlyApp.tsx only holds the auth request/session plumbing.
+  const combined = app + signInScreen;
 
   assert.match(app, /\/api\/auth\/request-code/);
   assert.match(app, /\/api\/auth\/verify-otp/);
   assert.match(app, /\/api\/auth\/session/);
-  assert.match(app, /\/api\/auth\/google\/start/);
-  assert.match(app, /Continue with Google/);
-  assert.doesNotMatch(app, /google-demo@moodly\.local/);
-  assert.doesNotMatch(app, /Open secure sign-in link/);
+  assert.match(signInScreen, /\/api\/auth\/google\/start/);
+  assert.match(signInScreen, /Continue with Google/);
+  assert.doesNotMatch(combined, /google-demo@moodly\.local/);
+  assert.doesNotMatch(combined, /Open secure sign-in link/);
 
   assert.match(requestRoute, /OTP_TTL_SECONDS/);
   assert.match(requestRoute, /sendOtpEmail/);
