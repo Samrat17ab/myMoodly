@@ -3,9 +3,18 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Brand } from "@/app/components/shared/Brand";
 import { Landing } from "@/app/components/screens/Landing";
 import { SignIn } from "@/app/components/screens/SignIn";
+import { Home } from "@/app/components/screens/Home";
+import { MoodMapStep } from "@/app/components/screens/checkin/MoodMapStep";
+import { WordPickerStep } from "@/app/components/screens/checkin/WordPickerStep";
+import { QuadrantFallbackStep } from "@/app/components/screens/checkin/QuadrantFallbackStep";
+import { ContextStep } from "@/app/components/screens/checkin/ContextStep";
+import { IntentionStep } from "@/app/components/screens/checkin/IntentionStep";
+import { useReducedMotionSafe } from "@/app/hooks/useReducedMotionSafe";
+import { stepVariants, reducedStepVariants } from "@/app/lib/motion";
 
 type Quadrant = "red" | "yellow" | "green" | "blue";
 type Profile = {
@@ -31,9 +40,12 @@ type RealtimePacket = {
   mine?: boolean;
 };
 type View =
-  | "welcome" | "auth" | "onboarding" | "home" | "energy" | "pleasantness"
+  | "welcome" | "auth" | "onboarding" | "home" | "mood"
   | "emotion" | "category" | "context" | "mode" | "queue" | "chat"
   | "survey" | "paywall" | "resources" | "guide" | "settings";
+
+// Check-in steps that share one AnimatePresence crossfade+drift transition.
+const CHECKIN_VIEWS = new Set<View>(["mood", "emotion", "category", "context", "mode"]);
 
 const words: Record<Quadrant, string[]> = {
   red: ["Enraged","Panicked","Stressed","Jittery","Shocked","Furious","Anxious","Livid","Frustrated","Tense","Stunned","Irritated","Fuming","Overwhelmed","Uneasy","Restless","Repulsed","Troubled","Peeved","Nervous","Annoyed","Apprehensive","Displeased","Worried","Bothered"],
@@ -41,7 +53,6 @@ const words: Record<Quadrant, string[]> = {
   green: ["At Ease","Content","Loving","Fulfilled","Calm","Secure","Satisfied","Relaxed","Chill","Restful","Blessed","Balanced","Mellow","Thoughtful","Peaceful","Comfortable","Carefree","Sleepy","Complacent","Tranquil","Cozy","Serene","Grateful","Touched","Reflective"],
   blue: ["Disappointed","Down","Apathetic","Pessimistic","Alienated","Miserable","Lonely","Disheartened","Guilty","Despondent","Hopeless","Empty","Remorseful","Depressed","Sad","Bored","Fatigued","Tired","Exhausted","Numb","Withdrawn","Isolated","Gloomy","Melancholic","Weary"],
 };
-const categoryLabel: Record<Quadrant, string> = { red:"Angry", blue:"Sad", yellow:"Happy", green:"Calm" };
 const countries = ["Nepal","India","United States","United Kingdom","Australia","Canada","Germany","France","Japan","Singapore","Other"];
 const languages = ["English","Nepali","Hindi","Spanish","French","German","Mandarin","Japanese"];
 const emptyProfile: Profile = { age:"", gender:"", customGender:"", country:"Nepal", languages:["English"], terms:false };
@@ -58,8 +69,7 @@ const VIEW_PATH: Record<View, string> = {
   auth: "/signin",
   onboarding: "/onboarding",
   home: "/home",
-  energy: "/checkin/energy",
-  pleasantness: "/checkin/pleasantness",
+  mood: "/checkin/mood",
   emotion: "/checkin/emotion",
   category: "/checkin/category",
   context: "/checkin/note",
@@ -102,6 +112,7 @@ async function matchRequest(payload: Record<string, unknown>) {
 }
 
 export default function MoodlyApp() {
+  const reducedMotion = useReducedMotionSafe();
   const [view, setView] = useState<View>("welcome");
   const [energy, setEnergy] = useState<"high"|"low"|null>(null);
   const [pleasant, setPleasant] = useState<boolean|null>(null);
@@ -149,6 +160,7 @@ export default function MoodlyApp() {
   const matchTransitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialPathRef = useRef(typeof window !== "undefined" ? window.location.pathname : "/");
   const historyPushesRef = useRef(0);
+  const [checkinDirection, setCheckinDirection] = useState<1 | -1>(1);
 
   const navigate = useCallback((next: View, opts?: { replace?: boolean }) => {
     setView(next);
@@ -397,8 +409,18 @@ export default function MoodlyApp() {
       navigate(email ? "home" : "welcome");
     }
   }, [navigate, email]);
-  const continueFromPleasant = (value:boolean) => { setPleasant(value); const next = energy === "high" ? (value ? "yellow":"red") : (value ? "green":"blue"); setQuadrant(next); navigate("emotion"); };
-  const chooseEmotion = (word:string) => { setEmotion(word); navigate("context"); setTimeout(() => noteRef.current?.focus(), 80); };
+  const navigateCheckin = useCallback((next: View, direction: 1 | -1) => {
+    setCheckinDirection(direction);
+    navigate(next);
+  }, [navigate]);
+  const confirmMood = (energyValue: "high"|"low", pleasantValue: boolean) => {
+    setEnergy(energyValue);
+    setPleasant(pleasantValue);
+    const next = energyValue === "high" ? (pleasantValue ? "yellow":"red") : (pleasantValue ? "green":"blue");
+    setQuadrant(next);
+    navigateCheckin("emotion", 1);
+  };
+  const chooseEmotion = (word:string) => { setEmotion(word); navigateCheckin("context", 1); setTimeout(() => noteRef.current?.focus(), 80); };
   const requestCode = async () => {
     const normalized = email.trim().toLowerCase();
     if (!normalized || authSending || resendSeconds > 0) return;
@@ -621,6 +643,7 @@ export default function MoodlyApp() {
       endChat();
     }
   };
+  const moodPoint = { pleasant: pleasant === false ? 0 : 1, energy: energy === "low" ? 0 : 1 };
   const fmt = (s:number) => `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
   const partnerInitials = partnerName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
   const messageTime = (value:string) => {
@@ -644,47 +667,63 @@ export default function MoodlyApp() {
 
   return (
     <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
-      {view !== "chat" && <AppHeader usage={usage} email={email} nickname={nickname} onHome={() => navigate("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
-      {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "energy")} onGuide={() => openOverlay("guide")}/>}
-      {view === "energy" && <Question step={1} title="How's your energy right now?" subtitle="Don't overthink it — choose what feels closest." onBack={() => navigate("home")}>
-        <div className="choice-grid">
-          <button className="energy-high" onClick={() => { setEnergy("high"); navigate("pleasantness"); }}><span className="choice-art">↗</span><b>High energy</b><small>Activated, alert, buzzing</small></button>
-          <button className="energy-low" onClick={() => { setEnergy("low"); navigate("pleasantness"); }}><span className="choice-art">〰</span><b>Low energy</b><small>Quiet, slow, still</small></button>
+      {view !== "chat" && <AppHeader email={email} nickname={nickname} onHome={() => navigate("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
+      {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "mood")} onGuide={() => openOverlay("guide")}/>}
+      {CHECKIN_VIEWS.has(view) && (
+        <div className="checkin-stage">
+        <AnimatePresence custom={checkinDirection}>
+          <motion.div
+            key={view}
+            className="checkin-stage-item"
+            custom={checkinDirection}
+            variants={reducedMotion ? reducedStepVariants : stepVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+          >
+            {view === "mood" && (
+              <MoodMapStep onContinue={confirmMood} onBack={() => navigateCheckin("home", -1)}/>
+            )}
+            {view === "emotion" && (
+              <WordPickerStep
+                words={words[quadrant]}
+                mood={moodPoint}
+                onChoose={chooseEmotion}
+                onNoneFit={() => navigateCheckin("category", 1)}
+                onBack={() => navigateCheckin("mood", -1)}
+              />
+            )}
+            {view === "category" && (
+              <QuadrantFallbackStep
+                onPick={(energyValue, pleasantValue) => { confirmMood(energyValue, pleasantValue); }}
+                onBack={() => navigateCheckin("emotion", -1)}
+              />
+            )}
+            {view === "context" && (
+              <ContextStep
+                emotion={emotion}
+                mood={moodPoint}
+                note={note}
+                setNote={setNote}
+                noteRef={noteRef}
+                onContinue={() => navigateCheckin("mode", 1)}
+                onBack={() => navigateCheckin("emotion", -1)}
+              />
+            )}
+            {view === "mode" && (
+              <IntentionStep
+                mode={mode}
+                setMode={setMode}
+                usage={usage}
+                mood={moodPoint}
+                onFindSomeone={() => void startQueue()}
+                onBack={() => navigateCheckin("context", -1)}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
         </div>
-      </Question>}
-      {view === "pleasantness" && <Question step={2} title="How pleasant does it feel?" subtitle="There isn't a right answer — only yours." onBack={() => navigate("energy")}>
-        <div className="choice-grid">
-          <button className="pleasant" onClick={() => continueFromPleasant(true)}><span className="choice-art">⌣</span><b>Pleasant</b><small>Good, comfortable, welcome</small></button>
-          <button className="unpleasant" onClick={() => continueFromPleasant(false)}><span className="choice-art">∿</span><b>Unpleasant</b><small>Difficult, uncomfortable, heavy</small></button>
-        </div>
-      </Question>}
-      {view === "emotion" && <section className="panel emotion-panel">
-        <Progress step={3}/><button className="back" onClick={() => navigate("pleasantness")}>←</button>
-        <div className="center-head"><span className="overline">ONE LAST DETAIL</span><h2>Which word feels closest?</h2><p>Pick the one that best names this moment.</p></div>
-        <div className="emotion-grid">{words[quadrant].map(w => <button key={w} onClick={() => chooseEmotion(w)}>{w}</button>)}</div>
-        <button className="other" onClick={() => navigate("category")}>None of these fit <span>→</span></button>
-      </section>}
-      {view === "category" && <Question step={3} title="Let's try another direction" subtitle="Choose the broad feeling that feels nearest." onBack={() => navigate("emotion")}>
-        <div className="category-grid">{(["red","blue","yellow","green"] as Quadrant[]).map(c => <button key={c} onClick={() => { setQuadrant(c); navigate("emotion"); }}><span className={`dot ${c}`}/><b>{categoryLabel[c]}</b><small>{c === "red" ? "High & unpleasant":c === "blue" ? "Low & unpleasant":c === "yellow" ? "High & pleasant":"Low & pleasant"}</small></button>)}</div>
-      </Question>}
-      {view === "context" && <section className="panel compact-panel">
-        <Progress step={4}/><button className="back" onClick={() => navigate("emotion")}>←</button>
-        <div className="feeling-chip">You're feeling <b>{emotion}</b></div>
-        <div className="center-head"><h2>Want to add a little context?</h2><p>Optional — just enough to help the conversation begin.</p></div>
-        <div className="note-box"><textarea ref={noteRef} maxLength={80} value={note} onChange={e => setNote(e.target.value)} placeholder="A few words about what's going on…"/><span>{note.length}/80</span></div>
-        <p className="privacy-note">⌁ Contact details are automatically removed to protect your privacy.</p>
-        <button className="primary wide" onClick={() => navigate("mode")}>{note ? "Continue":"Skip for now"} <span>→</span></button>
-      </section>}
-      {view === "mode" && <section className="panel compact-panel">
-        <Progress step={5}/><button className="back" onClick={() => navigate("context")}>←</button>
-        <div className="center-head"><span className="overline">YOUR INTENTION</span><h2>Who would feel right to talk to?</h2><p>You can choose differently every time you check in.</p></div>
-        <div className="mode-stack">
-          <button className={mode === "similar" ? "selected":""} onClick={() => setMode("similar")}><span className="mode-icon">≈</span><span><b>Someone who feels similar</b><small>Be met by someone in a close emotional place</small></span><i>✓</i></button>
-          <button className={mode === "different" ? "selected":""} onClick={() => setMode("different")}><span className="mode-icon">↔</span><span><b>Someone in a different headspace</b><small>Connect with a contrasting perspective</small></span><i>✓</i></button>
-        </div>
-        <button className="primary wide" onClick={() => void startQueue()}>Find someone <span>→</span></button>
-        <p className="free-left">{10-usage} free connections left today</p>
-      </section>}
+      )}
       {view === "queue" && <section className="queue-view">
         <div className="pulse-ring"><div><span>⌁</span></div></div>
         <span className="overline">LOOKING FOR A CONNECTION</span><h2>Finding someone who fits…</h2>
@@ -731,10 +770,7 @@ export default function MoodlyApp() {
   );
 }
 
-function Progress({step}:{step:number}){ return <div className="progress"><span>Step {step} of 5</span><div>{[1,2,3,4,5].map(n => <i className={n<=step?"on":""} key={n}/>)}</div></div>; }
-function AppHeader({usage,email,nickname,onHome,onGuide,onHelp,onSettings}:{usage:number,email:string,nickname:string,onHome:()=>void,onGuide:()=>void,onHelp:()=>void,onSettings:()=>void}){ return <header className="app-header"><button onClick={onHome}><Brand/></button><div className="app-nav"><span className="usage"><i>{usage}</i> of 10 connections today</span><button onClick={onGuide}>? <b>Guide</b></button><button className="help-now" onClick={onHelp}>♡ Need help now?</button><button className="mini-avatar" onClick={onSettings} title="Account settings">{initialsFor(nickname, email)}</button></div></header>; }
-function Question({step,title,subtitle,onBack,children}:{step:number,title:string,subtitle:string,onBack:()=>void,children:React.ReactNode}){ return <section className="panel question-panel"><Progress step={step}/><button className="back" onClick={onBack}>←</button><div className="center-head"><span className="overline">CHECK IN WITH YOURSELF</span><h2>{title}</h2><p>{subtitle}</p></div>{children}<p className="reassure">There are no wrong answers here.</p></section>; }
-function Home({usage,onStart,onGuide}:{usage:number,onStart:()=>void,onGuide:()=>void}){ return <section className="home-view"><div className="home-copy"><span className="overline">A QUIET SPACE TO BE HONEST</span><h1>How are you,<br/><em>really?</em></h1><p>Take a breath. Name what you're feeling, then connect with someone who can meet you there.</p><button className="primary large" onClick={onStart}>Start a mood check-in <span>→</span></button><button className="watch" onClick={onGuide}>▷ How myMoodly works</button></div><div className="home-visual"><div className="halo"/><div className="breath-card"><div className="breath-orb">⌁</div><span>Take a moment</span><b>There's space for<br/>whatever you feel.</b><small>Inhale · Exhale</small></div><div className="float-note fn1">“I felt heard.”</div><div className="float-note fn2">Anonymous & private</div></div><div className="today-card"><div><span>Today's connections</span><b>{usage} <small>/ 10 free</small></b></div><div className="usage-line"><i style={{width:`${usage*10}%`}}/></div><p>Your count resets at midnight UTC.</p></div></section>; }
+function AppHeader({email,nickname,onHome,onGuide,onHelp,onSettings}:{email:string,nickname:string,onHome:()=>void,onGuide:()=>void,onHelp:()=>void,onSettings:()=>void}){ return <header className="app-header"><button onClick={onHome}><Brand/></button><div className="app-nav"><button onClick={onGuide}>? <b>Guide</b></button><button className="help-now" onClick={onHelp}>♡ Need help now?</button><button className="mini-avatar" onClick={onSettings} title="Account settings">{initialsFor(nickname, email)}</button></div></header>; }
 function Onboarding({profile,setProfile,onDone,toast}:{profile:Profile,setProfile:(p:Profile)=>void,onDone:()=>void,toast:string}){ const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]}); return <main className="onboard-shell"><header><Brand/><span>Private setup · About 1 minute</span></header><section className="onboard-card"><span className="overline">YOUR PRIVATE PROFILE</span><h1>Just enough to keep myMoodly safe.</h1><p>This information is never shown to anyone you match with.</p><div className="form-grid"><label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label><label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>{profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}<label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset></div><label className="check"><input type="checkbox" checked={profile.terms} onChange={e=>setProfile({...profile,terms:e.target.checked})}/><span>I agree to the <Link href="/terms">Terms & Conditions</Link> and acknowledge the <Link href="/privacy">Privacy Policy</Link>. I understand myMoodly is 18+, anonymous but reportable, and not a crisis service.</span></label><button className="primary wide" onClick={onDone}>Complete setup <span>→</span></button></section>{toast&&<div className="toast">{toast}</div>}<button className="help-pill" onClick={()=>{}}>♡ Need help now?</button></main>; }
 function SurveyQuestion({label,options,value,onChange}:{label:string,options:string[],value:string,onChange:(v:string)=>void}){ return <div className="survey-q"><b>{label}</b><div>{options.map(o=><button className={value===o?"active":""} key={o} onClick={()=>onChange(o)}>{o}</button>)}</div></div>; }
 function Modal({title,onClose,children}:{title:string,onClose:()=>void,children:React.ReactNode}){ return <div className="modal-bg"><div className="modal"><button className="modal-close" onClick={onClose}>×</button><h2>{title}</h2>{children}</div></div>; }

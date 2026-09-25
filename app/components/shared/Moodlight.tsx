@@ -47,7 +47,11 @@ export function Moodlight({
   energy = 0.5,
   size = 96,
   breathe = true,
-  layoutId = "moodlight",
+  // No default: shared-layout travel is opt-in per call site, reserved for
+  // the few big, deliberate transitions (Home <-> Waiting <-> Chat) rather
+  // than every check-in step, where multiple differently-sized instances can
+  // be mounted at once during a crossfade and fight over one projection.
+  layoutId,
   className,
 }: MoodPoint & { size?: number; breathe?: boolean; layoutId?: string; className?: string }) {
   const reduced = useReducedMotionSafe();
