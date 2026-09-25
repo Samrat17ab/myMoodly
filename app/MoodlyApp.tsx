@@ -12,6 +12,9 @@ import { Waiting } from "@/app/components/screens/Waiting";
 import { Chat } from "@/app/components/screens/Chat";
 import { ClosingReflection } from "@/app/components/screens/ClosingReflection";
 import { Modal } from "@/app/components/shared/Modal";
+import { HelpSheet } from "@/app/components/shared/HelpSheet";
+import { Paywall } from "@/app/components/screens/Paywall";
+import { IconHelp } from "@/app/components/icons";
 import { MoodMapStep } from "@/app/components/screens/checkin/MoodMapStep";
 import { WordPickerStep } from "@/app/components/screens/checkin/WordPickerStep";
 import { QuadrantFallbackStep } from "@/app/components/screens/checkin/QuadrantFallbackStep";
@@ -146,6 +149,7 @@ export default function MoodlyApp() {
   const [reportDone, setReportDone] = useState(false);
   const [reportSending, setReportSending] = useState(false);
   const [toast, setToast] = useState("");
+  const [matchFound, setMatchFound] = useState(false);
   const [survey, setSurvey] = useState({ understood:"", change:"", partnerRating:"" });
   const [checkInId, setCheckInId] = useState("");
   const [ticketId, setTicketId] = useState("");
@@ -190,6 +194,7 @@ export default function MoodlyApp() {
 
   const scheduleMatchedChat = useCallback((data: Record<string, unknown>) => {
     if (!data.conversationId) return;
+    setMatchFound(true);
     setConversationId(String(data.conversationId));
     setPartnerName(String(data.partnerName ?? "Anonymous partner"));
     setPartnerEmotion(String(data.partnerEmotion ?? ""));
@@ -549,6 +554,7 @@ export default function MoodlyApp() {
       setCanRelax(false);
       setRelaxDismissed(false);
       setQueueSeconds(0);
+      setMatchFound(false);
       navigate("queue");
       if (match.status === "matched" && match.conversationId) {
         scheduleMatchedChat(match);
@@ -669,7 +675,7 @@ export default function MoodlyApp() {
   );
 
   if (view === "auth") return <SignIn email={email} setEmail={setEmail} otp={otp} setOtp={setOtp} otpSent={otpSent} sending={authSending} resendSeconds={resendSeconds} toast={toast} onRequestCode={requestCode} onVerifyCode={verifyCode} onReset={() => { setOtpSent(false); setOtp(""); setResendAvailableAt(null); }} onBack={() => navigate("welcome")}/>;
-  if (view === "onboarding") return <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile(() => navigate("home", { replace: true }))} toast={toast}/>;
+  if (view === "onboarding") return <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile(() => navigate("home", { replace: true }))} toast={toast} onHelp={() => openOverlay("resources")}/>;
 
   return (
     <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
@@ -736,6 +742,7 @@ export default function MoodlyApp() {
           mode={mode}
           mood={moodPoint}
           elapsedLabel={fmt(queueSeconds)}
+          matchFound={matchFound}
           canRelax={canRelax}
           relaxDismissed={relaxDismissed}
           relaxRequesting={relaxRequesting}
@@ -787,18 +794,16 @@ export default function MoodlyApp() {
         />
       )}
       {view === "paywall" && <Paywall onBack={() => navigate("home")}/>}
-      {view === "resources" && <Resources country={profile.country} onBack={goBack}/>}
+      {view === "resources" && <HelpSheet country={profile.country} onBack={goBack}/>}
       {view === "guide" && <Guide onBack={goBack}/>}
       {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} nickname={nickname} usage={usage} busy={accountBusy} onBack={goBack} onSave={() => void saveProfile(goBack)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()} feedbackSending={feedbackSending} onSendFeedback={(body, afterSend) => void submitFeedback(body, afterSend)}/>}
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
     </main>
   );
 }
 
 function AppHeader({email,nickname,onHome,onGuide,onHelp,onSettings}:{email:string,nickname:string,onHome:()=>void,onGuide:()=>void,onHelp:()=>void,onSettings:()=>void}){ return <header className="app-header"><button onClick={onHome}><Brand/></button><div className="app-nav"><button onClick={onGuide}>? <b>Guide</b></button><button className="help-now" onClick={onHelp}>♡ Need help now?</button><button className="mini-avatar" onClick={onSettings} title="Account settings">{initialsFor(nickname, email)}</button></div></header>; }
-function Onboarding({profile,setProfile,onDone,toast}:{profile:Profile,setProfile:(p:Profile)=>void,onDone:()=>void,toast:string}){ const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]}); return <main className="onboard-shell"><header><Brand/><span>Private setup · About 1 minute</span></header><section className="onboard-card"><span className="overline">YOUR PRIVATE PROFILE</span><h1>Just enough to keep myMoodly safe.</h1><p>This information is never shown to anyone you match with.</p><div className="form-grid"><label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label><label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>{profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}<label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset></div><label className="check"><input type="checkbox" checked={profile.terms} onChange={e=>setProfile({...profile,terms:e.target.checked})}/><span>I agree to the <Link href="/terms">Terms & Conditions</Link> and acknowledge the <Link href="/privacy">Privacy Policy</Link>. I understand myMoodly is 18+, anonymous but reportable, and not a crisis service.</span></label><button className="primary wide" onClick={onDone}>Complete setup <span>→</span></button></section>{toast&&<div className="toast">{toast}</div>}<button className="help-pill" onClick={()=>{}}>♡ Need help now?</button></main>; }
-function Resources({country,onBack}:{country:string,onBack:()=>void}){ return <section className="resource-view"><button className="back" onClick={onBack}>←</button><div className="resource-head"><span>♡</span><div><small>IMMEDIATE SUPPORT</small><h1>Need help right now?</h1><p>myMoodly isn't a crisis service, but you don't have to face this moment alone.</p></div></div><div className="resource-layout"><div><h3>Emergency contacts for {country}</h3>{country==="Nepal"?<><ResourceCard title="National Suicide Prevention Helpline" number="1166" note="Free, nationwide support"/><ResourceCard title="Police emergency" number="100" note="For immediate danger"/><ResourceCard title="Ambulance" number="102" note="Emergency medical support"/></>:<><ResourceCard title="Local emergency services" number="112 / 911" note="Use the number available in your country"/><ResourceCard title="Find a crisis centre" number="findahelpline.com" note="Verified helplines in 175+ countries"/></>}<p className="resource-foot">If a number doesn't connect, call your local emergency service or go to the nearest emergency department.</p></div><aside><h3>While you reach out</h3><p>Move to a place where other people are nearby.</p><p>Put distance between you and anything you could use to hurt yourself.</p><p>Text or call someone you trust and say: “I need you with me right now.”</p></aside></div></section>; }
-function ResourceCard({title,number,note}:{title:string,number:string,note:string}){ return <div className="resource-card"><span>☎</span><div><b>{title}</b><small>{note}</small></div><a href={number.match(/^\d/) ? `tel:${number.replace(/\D/g,"")}`:`https://${number}`}>{number}</a></div>; }
+function Onboarding({profile,setProfile,onDone,toast,onHelp}:{profile:Profile,setProfile:(p:Profile)=>void,onDone:()=>void,toast:string,onHelp:()=>void}){ const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]}); return <main className="onboard-shell"><header><Brand/><span>Private setup · About 1 minute</span></header><section className="onboard-card"><span className="overline">YOUR PRIVATE PROFILE</span><h1>Just enough to keep myMoodly safe.</h1><p>This information is never shown to anyone you match with.</p><div className="form-grid"><label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label><label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>{profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}<label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset></div><label className="check"><input type="checkbox" checked={profile.terms} onChange={e=>setProfile({...profile,terms:e.target.checked})}/><span>I agree to the <Link href="/terms">Terms & Conditions</Link> and acknowledge the <Link href="/privacy">Privacy Policy</Link>. I understand myMoodly is 18+, anonymous but reportable, and not a crisis service.</span></label><button className="primary wide" onClick={onDone}>Complete setup <span>→</span></button></section>{toast&&<div className="toast">{toast}</div>}<button className="help-pill" onClick={onHelp}><IconHelp size={15}/> Need help now?</button></main>; }
 function Guide({onBack}:{onBack:()=>void}){ const items=[["01","Name what you feel","Two quick questions guide you to one of 100 precise emotion words."],["02","Choose your intention","Talk with someone who feels similar, or someone in a different headspace."],["03","Meet anonymously","You're matched by mood and shared language — never by country, age, or gender."],["04","Talk for 20 minutes","A quiet timer keeps things contained. Continue only when you both agree."],["05","Stay in control","Report or block at any time. Emergency resources are always one tap away."]]; return <section className="guide-view"><button className="back" onClick={onBack}>←</button><span className="overline">HOW MYMOODLY WORKS</span><h1>A small check-in.<br/>A real human moment.</h1><div className="guide-grid">{items.map(x=><div key={x[0]}><i>{x[0]}</i><b>{x[1]}</b><p>{x[2]}</p></div>)}</div><div className="guide-limit"><b>10 conversations a day are free.</b><span></span></div></section>; }
 function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,onSignOut,onDeleteAccount,feedbackSending,onSendFeedback}:{profile:Profile,setProfile:(p:Profile)=>void,email:string,nickname:string,usage:number,busy:boolean,onBack:()=>void,onSave:()=>void,onSignOut:()=>void,onDeleteAccount:()=>void,feedbackSending:boolean,onSendFeedback:(body:string,afterSend:()=>void)=>void}){
   const [confirmDelete,setConfirmDelete]=useState(false);
@@ -844,4 +849,3 @@ function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,on
     </Modal>}
   </section>;
 }
-function Paywall({onBack}:{onBack:()=>void}){ return <section className="paywall"><button className="back" onClick={onBack}>←</button><div className="pay-visual"><span>∞</span></div><span className="overline">COMING SOON</span><h1>More connections are on the way.</h1><p>You've used today's 10 free connections. We're building a way to offer more — it isn't ready yet, so there's nothing to buy here right now.</p><small>Your free connections reset at midnight UTC.</small></section>; }

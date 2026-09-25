@@ -19,6 +19,7 @@ export function Waiting({
   mode,
   mood,
   elapsedLabel,
+  matchFound,
   canRelax,
   relaxDismissed,
   relaxRequesting,
@@ -30,6 +31,7 @@ export function Waiting({
   mode: "similar" | "different";
   mood: MoodPoint;
   elapsedLabel: string;
+  matchFound: boolean;
   canRelax: boolean;
   relaxDismissed: boolean;
   relaxRequesting: boolean;
@@ -57,8 +59,10 @@ export function Waiting({
       >
         {breathingIn ? "Breathe in" : "Breathe out"}
       </motion.p>
-      <h2>Finding someone who fits…</h2>
-      <p>We&apos;re searching for {mode === "similar" ? "someone in a similar emotional place" : "a different, complementary headspace"}.</p>
+      <h2 aria-live="polite">{matchFound ? "Match found — starting your conversation…" : "Finding someone who fits…"}</h2>
+      {!matchFound && (
+        <p>We&apos;re searching for {mode === "similar" ? "someone in a similar emotional place" : "a different, complementary headspace"}.</p>
+      )}
       <div className="queue-card">
         <div>
           <span>Your check-in</span>
@@ -79,7 +83,7 @@ export function Waiting({
       >
         {REASSURANCE_LINES[lineIndex]}
       </motion.p>
-      {canRelax && !relaxDismissed && (
+      {!matchFound && canRelax && !relaxDismissed && (
         <div className="relax-banner">
           <span>The kind of match you wanted isn&apos;t available right now, but others are waiting to connect.</span>
           <div>
@@ -92,9 +96,11 @@ export function Waiting({
           </div>
         </div>
       )}
-      <button type="button" className="text-button cancel" onClick={onCancel}>
-        Cancel search
-      </button>
+      {!matchFound && (
+        <button type="button" className="text-button cancel" onClick={onCancel}>
+          Cancel search
+        </button>
+      )}
     </section>
   );
 }

@@ -165,7 +165,7 @@ export function Chat({
         </div>
       </div>
 
-      <div className="messages">
+      <div className="messages" aria-live="polite" aria-relevant="additions">
         <div className="system-note">You&apos;re both anonymous. Messages are delivered live and saved securely for this conversation.</div>
         {messages.length === 0 && (
           <div className="icebreakers">
