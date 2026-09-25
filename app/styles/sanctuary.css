@@ -1,0 +1,267 @@
+/* The Sanctuary: living background system. Everything here is decorative,
+   pointer-events:none, and paused via [data-motion="off"] on the root. */
+
+.sanctuary {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+}
+.sanctuary-poster {
+  position: absolute;
+  inset: 0;
+  transition: opacity 1.2s ease;
+}
+.sanctuary-poster.is-entering {
+  opacity: 0;
+}
+.sanctuary-poster.is-active {
+  opacity: 1;
+  transition: opacity var(--sanctuary-crossfade, 5000ms) ease;
+}
+/* Softened mode (check-in steps): light mist scrim + reduced saturation. */
+.sanctuary.is-softened .sanctuary-poster {
+  filter: saturate(0.72) brightness(1.02);
+}
+.sanctuary.is-softened::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--mist) 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+/* Receded mode (chat): scene visible only at the blurred, dimmed edges. */
+.sanctuary.is-receded .sanctuary-poster {
+  filter: saturate(0.6) brightness(0.75) blur(18px);
+  transform: scale(1.08);
+}
+.sanctuary.is-receded::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, transparent 30%, color-mix(in srgb, var(--night) 55%, transparent) 100%);
+}
+
+.sanctuary-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sanctuary-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sanctuary[data-motion="off"] .sanctuary-layer * {
+  animation: none !important;
+}
+
+/* Clouds */
+.sanctuary-cloud {
+  position: absolute;
+  left: -30%;
+  height: 60px;
+  border-radius: 50%;
+  background: #ffffff;
+  filter: blur(18px);
+  animation-name: sanctuary-drift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes sanctuary-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(160vw); }
+}
+
+/* Stars */
+.sanctuary-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #fff;
+  animation-name: sanctuary-twinkle;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+@keyframes sanctuary-twinkle {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.95; }
+}
+.sanctuary-shooting-star {
+  position: absolute;
+  top: 12%;
+  left: 10%;
+  width: 90px;
+  height: 1.5px;
+  background: linear-gradient(90deg, #fff, transparent);
+  opacity: 0;
+  animation: sanctuary-shoot 14s ease-in infinite;
+  animation-delay: 6s;
+}
+@keyframes sanctuary-shoot {
+  0%, 92% { opacity: 0; transform: translate(0, 0); }
+  93% { opacity: 1; }
+  97% { opacity: 0; transform: translate(220px, 90px); }
+  100% { opacity: 0; }
+}
+
+/* Aurora */
+.sanctuary-aurora-ribbon {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  height: 40%;
+  background: linear-gradient(100deg, transparent, #6fd6b4aa, #8fc8e0aa, transparent);
+  filter: blur(30px);
+  mix-blend-mode: screen;
+  animation: sanctuary-aurora-sway 22s ease-in-out infinite;
+}
+.a1 { top: 4%; animation-duration: 26s; }
+.a2 { top: 14%; opacity: 0.6; animation-duration: 32s; animation-direction: reverse; }
+@keyframes sanctuary-aurora-sway {
+  0%, 100% { transform: translateX(-4%) scaleY(1); }
+  50% { transform: translateX(4%) scaleY(1.15); }
+}
+
+/* Mist */
+.sanctuary-mist-band {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  height: 40%;
+  bottom: 0;
+  background: linear-gradient(180deg, transparent, #ffffffb0);
+  filter: blur(6px);
+  animation: sanctuary-drift-slow 60s ease-in-out infinite;
+}
+.m1 { bottom: -4%; animation-duration: 70s; }
+.m2 { bottom: 6%; opacity: 0.6; animation-duration: 90s; animation-direction: reverse; }
+@keyframes sanctuary-drift-slow {
+  0%, 100% { transform: translateX(-3%); }
+  50% { transform: translateX(3%); }
+}
+
+/* Fireflies */
+.sanctuary-firefly {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #f3e2a0;
+  box-shadow: 0 0 6px 2px #f3e2a0aa;
+  animation-name: sanctuary-firefly-float;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+@keyframes sanctuary-firefly-float {
+  0%, 100% { transform: translate(0, 0); opacity: 0.2; }
+  50% { transform: translate(8px, -14px); opacity: 0.9; }
+}
+
+/* Rain */
+.sanctuary-raindrop {
+  position: absolute;
+  top: -10%;
+  width: 1px;
+  height: 16px;
+  background: linear-gradient(180deg, transparent, #dce9e4aa);
+  animation-name: sanctuary-rainfall;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+@keyframes sanctuary-rainfall {
+  from { transform: translateY(-10%); }
+  to { transform: translateY(115vh); }
+}
+
+/* Birds */
+.sanctuary-bird {
+  position: absolute;
+  color: #ffffffcc;
+  opacity: 0;
+  animation-name: sanctuary-bird-cross;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+.b1 { top: 14%; animation-duration: 48s; }
+.b2 { top: 22%; animation-duration: 60s; animation-delay: 18s; }
+@keyframes sanctuary-bird-cross {
+  0% { opacity: 0; transform: translateX(-5vw); }
+  4% { opacity: 0.8; }
+  12% { opacity: 0.8; transform: translateX(45vw); }
+  16% { opacity: 0; transform: translateX(60vw); }
+  100% { opacity: 0; transform: translateX(60vw); }
+}
+
+/* Grass */
+.sanctuary-blade {
+  position: absolute;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px 3px 0 0;
+  background: #345c3fbb;
+  transform-origin: bottom center;
+  animation-name: sanctuary-sway;
+  animation-duration: 4.5s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+@keyframes sanctuary-sway {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
+}
+
+/* Scene controls — quiet, bottom-left */
+.sanctuary-controls {
+  position: fixed;
+  z-index: 9;
+  left: 22px;
+  bottom: 26px;
+  display: flex;
+  gap: 8px;
+}
+.sanctuary-controls button {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid #ffffff40;
+  background: #00000022;
+  backdrop-filter: blur(10px);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+.sanctuary-picker {
+  position: fixed;
+  z-index: 9;
+  left: 22px;
+  bottom: 72px;
+  background: #ffffffed;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  width: 220px;
+  box-shadow: 0 20px 50px #1c2b2733;
+}
+.sanctuary-picker button {
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #ffffff80;
+}
+.sanctuary-picker button.is-selected {
+  outline: 2px solid var(--pine);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sanctuary-layer * {
+    animation: none !important;
+  }
+}
