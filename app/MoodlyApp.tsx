@@ -15,7 +15,8 @@ import { Modal } from "@/app/components/shared/Modal";
 import { HelpSheet } from "@/app/components/shared/HelpSheet";
 import { Paywall } from "@/app/components/screens/Paywall";
 import { IconHelp } from "@/app/components/icons";
-import { MoodMapStep } from "@/app/components/screens/checkin/MoodMapStep";
+import { EnergyStep } from "@/app/components/screens/checkin/EnergyStep";
+import { PleasantnessStep } from "@/app/components/screens/checkin/PleasantnessStep";
 import { WordPickerStep } from "@/app/components/screens/checkin/WordPickerStep";
 import { QuadrantFallbackStep } from "@/app/components/screens/checkin/QuadrantFallbackStep";
 import { ContextStep } from "@/app/components/screens/checkin/ContextStep";
@@ -47,12 +48,12 @@ type RealtimePacket = {
   mine?: boolean;
 };
 type View =
-  | "welcome" | "auth" | "onboarding" | "home" | "mood"
+  | "welcome" | "auth" | "onboarding" | "home" | "energy" | "pleasantness"
   | "emotion" | "category" | "context" | "mode" | "queue" | "chat"
   | "survey" | "paywall" | "resources" | "guide" | "settings";
 
 // Check-in steps that share one AnimatePresence crossfade+drift transition.
-const CHECKIN_VIEWS = new Set<View>(["mood", "emotion", "category", "context", "mode"]);
+const CHECKIN_VIEWS = new Set<View>(["energy", "pleasantness", "emotion", "category", "context", "mode"]);
 
 const words: Record<Quadrant, string[]> = {
   red: ["Enraged","Panicked","Stressed","Jittery","Shocked","Furious","Anxious","Livid","Frustrated","Tense","Stunned","Irritated","Fuming","Overwhelmed","Uneasy","Restless","Repulsed","Troubled","Peeved","Nervous","Annoyed","Apprehensive","Displeased","Worried","Bothered"],
@@ -76,7 +77,8 @@ const VIEW_PATH: Record<View, string> = {
   auth: "/signin",
   onboarding: "/onboarding",
   home: "/home",
-  mood: "/checkin/mood",
+  energy: "/checkin/energy",
+  pleasantness: "/checkin/pleasantness",
   emotion: "/checkin/emotion",
   category: "/checkin/category",
   context: "/checkin/note",
@@ -421,10 +423,13 @@ export default function MoodlyApp() {
     setCheckinDirection(direction);
     navigate(next);
   }, [navigate]);
-  const confirmMood = (energyValue: "high"|"low", pleasantValue: boolean) => {
-    setEnergy(energyValue);
-    setPleasant(pleasantValue);
-    const next = energyValue === "high" ? (pleasantValue ? "yellow":"red") : (pleasantValue ? "green":"blue");
+  const chooseEnergy = (value: "high"|"low") => {
+    setEnergy(value);
+    navigateCheckin("pleasantness", 1);
+  };
+  const continueFromPleasant = (value: boolean) => {
+    setPleasant(value);
+    const next = energy === "high" ? (value ? "yellow":"red") : (value ? "green":"blue");
     setQuadrant(next);
     navigateCheckin("emotion", 1);
   };
@@ -680,7 +685,7 @@ export default function MoodlyApp() {
   return (
     <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
       {view !== "chat" && <AppHeader email={email} nickname={nickname} onHome={() => navigate("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
-      {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "mood")} onGuide={() => openOverlay("guide")}/>}
+      {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "energy")} onGuide={() => openOverlay("guide")}/>}
       {CHECKIN_VIEWS.has(view) && (
         <div className="checkin-stage">
         <AnimatePresence custom={checkinDirection}>
@@ -693,8 +698,11 @@ export default function MoodlyApp() {
             animate="center"
             exit="exit"
           >
-            {view === "mood" && (
-              <MoodMapStep onContinue={confirmMood} onBack={() => navigateCheckin("home", -1)}/>
+            {view === "energy" && (
+              <EnergyStep onChoose={chooseEnergy} onBack={() => navigateCheckin("home", -1)}/>
+            )}
+            {view === "pleasantness" && (
+              <PleasantnessStep onChoose={continueFromPleasant} onBack={() => navigateCheckin("energy", -1)}/>
             )}
             {view === "emotion" && (
               <WordPickerStep
@@ -702,12 +710,12 @@ export default function MoodlyApp() {
                 mood={moodPoint}
                 onChoose={chooseEmotion}
                 onNoneFit={() => navigateCheckin("category", 1)}
-                onBack={() => navigateCheckin("mood", -1)}
+                onBack={() => navigateCheckin("pleasantness", -1)}
               />
             )}
             {view === "category" && (
               <QuadrantFallbackStep
-                onPick={(energyValue, pleasantValue) => { confirmMood(energyValue, pleasantValue); }}
+                onPick={(q) => { setQuadrant(q); navigateCheckin("emotion", 1); }}
                 onBack={() => navigateCheckin("emotion", -1)}
               />
             )}

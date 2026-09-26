@@ -5,7 +5,7 @@ import { IconBack } from "@/app/components/icons";
 import { Moodlight, type MoodPoint } from "./Moodlight";
 import { entrance } from "@/app/lib/motion";
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 /** Consistent step indicator + a back button that sits in normal flex flow
  * (never absolutely overlapping the header, unlike the legacy .panel/.back
