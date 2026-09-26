@@ -1,5 +1,6 @@
 "use client";
 import { StepFlow } from "@/app/components/shared/StepFlow";
+import { MotionButton } from "@/app/components/shared/MotionButton";
 import type { MoodPoint } from "@/app/components/shared/Moodlight";
 import { IconCheck, IconDifferent, IconSimilar } from "@/app/components/icons";
 
@@ -27,7 +28,7 @@ export function IntentionStep({
       mood={mood}
     >
       <div className="mode-stack">
-        <button type="button" className={mode === "similar" ? "selected" : ""} onClick={() => setMode("similar")}>
+        <MotionButton className={mode === "similar" ? "selected" : ""} onClick={() => setMode("similar")}>
           <span className="mode-icon">
             <IconSimilar size={20} />
           </span>
@@ -38,8 +39,8 @@ export function IntentionStep({
           <i>
             <IconCheck size={16} />
           </i>
-        </button>
-        <button type="button" className={mode === "different" ? "selected" : ""} onClick={() => setMode("different")}>
+        </MotionButton>
+        <MotionButton className={mode === "different" ? "selected" : ""} onClick={() => setMode("different")}>
           <span className="mode-icon">
             <IconDifferent size={20} />
           </span>
@@ -50,11 +51,11 @@ export function IntentionStep({
           <i>
             <IconCheck size={16} />
           </i>
-        </button>
+        </MotionButton>
       </div>
-      <button type="button" className="primary wide" onClick={onFindSomeone}>
+      <MotionButton className="primary wide" onClick={onFindSomeone}>
         Find someone
-      </button>
+      </MotionButton>
       <p className="free-left">{10 - usage} free connections left today</p>
     </StepFlow>
   );

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { IconBack } from "@/app/components/icons";
 import { Moodlight, type MoodPoint } from "./Moodlight";
+import { MotionButton } from "./MotionButton";
 import { entrance } from "@/app/lib/motion";
 
 const TOTAL_STEPS = 5;
@@ -30,9 +31,9 @@ export function StepFlow({
   return (
     <section className={`step-flow ${wide ? "step-flow-wide" : ""}`}>
       <div className="step-flow-head">
-        <button type="button" className="step-flow-back" onClick={onBack} aria-label="Back">
+        <MotionButton className="step-flow-back" onClick={onBack} aria-label="Back">
           <IconBack size={16} />
-        </button>
+        </MotionButton>
         <div
           className="step-flow-progress"
           role="progressbar"

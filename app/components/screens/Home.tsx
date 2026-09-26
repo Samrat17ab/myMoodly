@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { BreathingMoment } from "@/app/components/shared/BreathingMoment";
+import { MotionButton } from "@/app/components/shared/MotionButton";
 import { IconPlay } from "@/app/components/icons";
 
 function greeting(hour: number) {
@@ -37,13 +38,13 @@ export function Home({ usage, onStart, onGuide }: { usage: number; onStart: () =
           How are you, really?
         </h1>
         <p>Take a breath. Name what you&apos;re feeling, then connect with someone who can meet you there.</p>
-        <button type="button" className="primary large" onClick={onStart}>
+        <MotionButton className="primary large" onClick={onStart}>
           Start a check-in
-        </button>
+        </MotionButton>
         <p className="home-usage-line">{usage} of 10 connections today</p>
-        <button type="button" className="watch" onClick={onGuide}>
+        <MotionButton className="watch" onClick={onGuide}>
           <IconPlay size={12} /> How myMoodly works
-        </button>
+        </MotionButton>
       </div>
       <div className="home-visual">
         <BreathingMoment secondsLeft={secondsLeft} onActivate={() => setSecondsLeft(GUIDED_BREATH_SECONDS)} />

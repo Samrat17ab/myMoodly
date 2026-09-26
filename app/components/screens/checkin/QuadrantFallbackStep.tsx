@@ -1,5 +1,6 @@
 "use client";
 import { StepFlow } from "@/app/components/shared/StepFlow";
+import { MotionButton } from "@/app/components/shared/MotionButton";
 
 type Quadrant = "red" | "yellow" | "green" | "blue";
 
@@ -24,11 +25,11 @@ export function QuadrantFallbackStep({
     <StepFlow step={3} title="Let's try another direction" subtitle="Choose the broad feeling that feels nearest." onBack={onBack}>
       <div className="category-grid">
         {CATEGORIES.map((c) => (
-          <button key={c.quadrant} type="button" onClick={() => onPick(c.quadrant)}>
+          <MotionButton key={c.quadrant} onClick={() => onPick(c.quadrant)}>
             <span className={`dot ${c.quadrant}`} />
             <b>{c.label}</b>
             <small>{c.hint}</small>
-          </button>
+          </MotionButton>
         ))}
       </div>
       <p className="reassure">There are no wrong answers here.</p>
