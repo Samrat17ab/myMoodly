@@ -1,9 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Moodlight } from "@/app/components/shared/Moodlight";
+import { BreathingMoment } from "@/app/components/shared/BreathingMoment";
 import { IconPlay } from "@/app/components/icons";
-import { useBreathingCycle } from "@/app/hooks/useBreathingCycle";
 
 function greeting(hour: number) {
   if (hour < 5) return "You're up late.";
@@ -16,7 +14,6 @@ const GUIDED_BREATH_SECONDS = 60;
 
 export function Home({ usage, onStart, onGuide }: { usage: number; onStart: () => void; onGuide: () => void }) {
   const [hour, setHour] = useState(12); // safe default until the client corrects it
-  const breathingIn = useBreathingCycle();
   // null = no guided breath running; otherwise seconds remaining.
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
@@ -49,13 +46,7 @@ export function Home({ usage, onStart, onGuide }: { usage: number; onStart: () =
         </button>
       </div>
       <div className="home-visual">
-        <button type="button" className="breath-card" onClick={() => setSecondsLeft(GUIDED_BREATH_SECONDS)}>
-          <Moodlight layoutId="moodlight" size={100} pleasant={0.6} energy={0.4} />
-          <span>{secondsLeft === null ? "Take a moment" : `${secondsLeft}s left`}</span>
-          <motion.b key={breathingIn ? "in" : "out"} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-            {breathingIn ? "Breathe in" : "Breathe out"}
-          </motion.b>
-        </button>
+        <BreathingMoment secondsLeft={secondsLeft} onActivate={() => setSecondsLeft(GUIDED_BREATH_SECONDS)} />
       </div>
     </section>
   );
