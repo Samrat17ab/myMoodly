@@ -18,8 +18,7 @@ import { MoodMapStep } from "@/app/components/screens/checkin/MoodMapStep";
 import type { MoodValue } from "@/app/components/shared/MoodMapField";
 import { WordPickerStep } from "@/app/components/screens/checkin/WordPickerStep";
 import { QuadrantFallbackStep } from "@/app/components/screens/checkin/QuadrantFallbackStep";
-import { ContextStep } from "@/app/components/screens/checkin/ContextStep";
-import { IntentionStep } from "@/app/components/screens/checkin/IntentionStep";
+import { DetailsStep } from "@/app/components/screens/checkin/DetailsStep";
 import { useReducedMotionSafe } from "@/app/hooks/useReducedMotionSafe";
 import { stepVariants, reducedStepVariants } from "@/app/lib/motion";
 import { emptyProfile, initialsFor, type Profile } from "@/app/lib/profile";
@@ -41,11 +40,11 @@ type RealtimePacket = {
 };
 type View =
   | "welcome" | "auth" | "onboarding" | "home" | "mood"
-  | "emotion" | "category" | "context" | "mode" | "queue" | "chat"
+  | "emotion" | "category" | "context" | "queue" | "chat"
   | "survey" | "paywall" | "resources" | "guide" | "settings";
 
 // Check-in steps that share one AnimatePresence crossfade+drift transition.
-const CHECKIN_VIEWS = new Set<View>(["mood", "emotion", "category", "context", "mode"]);
+const CHECKIN_VIEWS = new Set<View>(["mood", "emotion", "category", "context"]);
 
 const words: Record<Quadrant, string[]> = {
   red: ["Enraged","Panicked","Stressed","Jittery","Shocked","Furious","Anxious","Livid","Frustrated","Tense","Stunned","Irritated","Fuming","Overwhelmed","Uneasy","Restless","Repulsed","Troubled","Peeved","Nervous","Annoyed","Apprehensive","Displeased","Worried","Bothered"],
@@ -75,8 +74,7 @@ const VIEW_PATH: Record<View, string> = {
   mood: "/checkin/mood",
   emotion: "/checkin/emotion",
   category: "/checkin/category",
-  context: "/checkin/note",
-  mode: "/checkin/mode",
+  context: "/checkin/details",
   queue: "/checkin/matching",
   chat: "/chat",
   survey: "/checkin/survey",
@@ -287,7 +285,7 @@ export default function MoodlyApp() {
         } else if (data.status === "expired" || data.status === "cancelled") {
           active = false;
           setToast("No match was found this time. You can try again.");
-          navigate("mode");
+          navigate("context");
         } else {
           setCanRelax(Boolean(data.canRelax));
         }
@@ -436,10 +434,11 @@ export default function MoodlyApp() {
     const next: Quadrant = nextEnergy === "high" ? (nextPleasant ? "yellow":"red") : (nextPleasant ? "green":"blue");
     setEnergy(nextEnergy);
     setPleasant(nextPleasant);
+    if (next !== quadrant) setEmotion("");
     setQuadrant(next);
     navigateCheckin("emotion", 1);
   };
-  const chooseEmotion = (word:string) => { setEmotion(word); navigateCheckin("context", 1); setTimeout(() => noteRef.current?.focus(), 80); };
+  const continueFromEmotion = () => { navigateCheckin("context", 1); setTimeout(() => noteRef.current?.focus(), 80); };
   const requestCode = async () => {
     const normalized = email.trim().toLowerCase();
     if (!normalized || authSending || resendSeconds > 0) return;
@@ -584,7 +583,7 @@ export default function MoodlyApp() {
         return;
       }
       setTicketId("");
-      navigate("mode");
+      navigate("context");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not cancel matchmaking.");
     }
@@ -717,8 +716,11 @@ export default function MoodlyApp() {
             {view === "emotion" && (
               <WordPickerStep
                 words={wordsNear(quadrant, moodValue)}
+                allWords={words[quadrant]}
+                selected={emotion}
                 mood={moodPoint}
-                onChoose={chooseEmotion}
+                onPick={setEmotion}
+                onContinue={continueFromEmotion}
                 onNoneFit={() => navigateCheckin("category", 1)}
                 onBack={() => navigateCheckin("mood", -1)}
               />
@@ -730,24 +732,17 @@ export default function MoodlyApp() {
               />
             )}
             {view === "context" && (
-              <ContextStep
+              <DetailsStep
                 emotion={emotion}
                 mood={moodPoint}
                 note={note}
                 setNote={setNote}
                 noteRef={noteRef}
-                onContinue={() => navigateCheckin("mode", 1)}
-                onBack={() => navigateCheckin("emotion", -1)}
-              />
-            )}
-            {view === "mode" && (
-              <IntentionStep
                 mode={mode}
                 setMode={setMode}
                 usage={usage}
-                mood={moodPoint}
-                onFindSomeone={() => void startQueue()}
-                onBack={() => navigateCheckin("context", -1)}
+                onSubmit={() => void startQueue()}
+                onBack={() => navigateCheckin("emotion", -1)}
               />
             )}
           </motion.div>

@@ -3,22 +3,7 @@ import { StepFlow } from "@/app/components/shared/StepFlow";
 import { MotionButton } from "@/app/components/shared/MotionButton";
 import { QuadrantTiles } from "@/app/components/shared/QuadrantTiles";
 import { MoodMapField, type MoodValue } from "@/app/components/shared/MoodMapField";
-
-const QUADRANT_HINT: Record<string, string> = {
-  Angry: "Maybe anxious, stressed, frustrated or restless.",
-  Happy: "Maybe excited, hopeful, energised or playful.",
-  Calm: "Maybe content, relieved or at ease.",
-  Sad: "Maybe tired, lonely, low or drained.",
-};
-
-function readMood(value: MoodValue) {
-  const energyHigh = value.energy >= 0.5;
-  const pleasant = value.pleasant >= 0.5;
-  const quadrant = energyHigh ? (pleasant ? "Happy" : "Angry") : pleasant ? "Calm" : "Sad";
-  const d = Math.hypot(value.pleasant - 0.5, value.energy - 0.5);
-  const level = d < 0.18 ? "A little " : d > 0.42 ? "Very " : "";
-  return { label: `${level}${level ? quadrant.toLowerCase() : quadrant}`, hint: QUADRANT_HINT[quadrant] };
-}
+import { readMood } from "@/app/lib/moodQuadrant";
 
 /** Merges the old separate energy + pleasantness questions into one
  * drag-based mood map. Two columns, like the rest of the check-in's

@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { Moodlight, type MoodPoint } from "@/app/components/shared/Moodlight";
 import { QuadrantTiles } from "@/app/components/shared/QuadrantTiles";
+import { MotionButton } from "@/app/components/shared/MotionButton";
+import { Sanctuary } from "@/app/components/sanctuary/Sanctuary";
 import { IconLeaf } from "@/app/components/icons";
 
 type SurveyAnswers = { understood: string; change: string; partnerRating: string };
@@ -22,9 +24,9 @@ function SurveyQuestion({
       <b>{label}</b>
       <div>
         {options.map((o) => (
-          <button key={o} type="button" className={value === o ? "active" : ""} onClick={() => onChange(o)}>
+          <MotionButton key={o} type="button" className={value === o ? "active" : ""} onClick={() => onChange(o)}>
             {o}
-          </button>
+          </MotionButton>
         ))}
       </div>
     </div>
@@ -49,49 +51,52 @@ export function ClosingReflection({
   const [afterMood, setAfterMood] = useState<MoodPoint | null>(null);
 
   return (
-    <section className="panel compact-panel survey-panel">
-      <div className="survey-art">
-        <IconLeaf size={28} />
-      </div>
-      <h2>How did that feel?</h2>
-      <p>Your answer helps us make future matches better.</p>
-
-      <div className="mood-reflection">
-        <div>
-          <Moodlight {...beforeMood} size={56} breathe={false} />
-          <small>You came in feeling {emotion || "—"}</small>
+    <div className="reflect-shell">
+      <Sanctuary mode="full" showControls={false} />
+      <section className="panel compact-panel survey-panel">
+        <div className="survey-art">
+          <IconLeaf size={28} />
         </div>
-        <div>
-          <Moodlight {...(afterMood ?? beforeMood)} size={56} breathe={false} />
-          <small>{afterMood ? "Leaving like this" : "How do you feel leaving?"}</small>
-        </div>
-      </div>
-      {!afterMood && <QuadrantTiles onPick={(energy, pleasant) => setAfterMood({ energy: energy === "high" ? 1 : 0, pleasant: pleasant ? 1 : 0 })} />}
+        <h1>Thanks for showing up.</h1>
+        <p>Before you go: how did that feel?</p>
 
-      <SurveyQuestion
-        label="Did you feel understood in this conversation?"
-        options={["Yes", "Somewhat", "No"]}
-        value={survey.understood}
-        onChange={(v) => setSurvey({ ...survey, understood: v })}
-      />
-      <SurveyQuestion
-        label="How do you feel compared to before?"
-        options={["Better", "Same", "Worse"]}
-        value={survey.change}
-        onChange={(v) => setSurvey({ ...survey, change: v })}
-      />
-      <SurveyQuestion
-        label="How was this match?"
-        options={["Great", "Okay", "Not for me"]}
-        value={survey.partnerRating}
-        onChange={(v) => setSurvey({ ...survey, partnerRating: v })}
-      />
-      <button type="button" className="primary wide" onClick={onSubmit}>
-        Submit response
-      </button>
-      <button type="button" className="text-button skip" onClick={onSkip}>
-        Skip for now
-      </button>
-    </section>
+        <div className="mood-reflection">
+          <div>
+            <Moodlight {...beforeMood} size={56} breathe={false} />
+            <small>You came in feeling {emotion || "—"}</small>
+          </div>
+          <div>
+            <Moodlight {...(afterMood ?? beforeMood)} size={56} breathe={false} />
+            <small>{afterMood ? "Leaving like this" : "How do you feel leaving?"}</small>
+          </div>
+        </div>
+        {!afterMood && <QuadrantTiles onPick={(energy, pleasant) => setAfterMood({ energy: energy === "high" ? 1 : 0, pleasant: pleasant ? 1 : 0 })} />}
+
+        <SurveyQuestion
+          label="Did you feel understood in this conversation?"
+          options={["Yes", "Somewhat", "No"]}
+          value={survey.understood}
+          onChange={(v) => setSurvey({ ...survey, understood: v })}
+        />
+        <SurveyQuestion
+          label="How do you feel compared to before?"
+          options={["Better", "Same", "Worse"]}
+          value={survey.change}
+          onChange={(v) => setSurvey({ ...survey, change: v })}
+        />
+        <SurveyQuestion
+          label="How was this match?"
+          options={["Great", "Okay", "Not for me"]}
+          value={survey.partnerRating}
+          onChange={(v) => setSurvey({ ...survey, partnerRating: v })}
+        />
+        <MotionButton type="button" className="primary wide" onClick={onSubmit}>
+          Submit response
+        </MotionButton>
+        <MotionButton type="button" className="text-button skip" onClick={onSkip}>
+          Skip for now
+        </MotionButton>
+      </section>
+    </div>
   );
 }

@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Brand } from "@/app/components/shared/Brand";
 import { moodColor, type MoodPoint } from "@/app/components/shared/Moodlight";
 import { Modal } from "@/app/components/shared/Modal";
+import { MotionButton } from "@/app/components/shared/MotionButton";
+import { Sanctuary } from "@/app/components/sanctuary/Sanctuary";
 import {
   IconBlock,
   IconEnd,
@@ -87,7 +89,9 @@ export function Chat({
   const circumference = 2 * Math.PI * 15;
 
   return (
-    <section className="chat-view">
+    <div className="chat-shell">
+      <Sanctuary mode="receded" showControls={false} />
+      <section className="chat-view">
       <header className="chat-header">
         <Brand />
         <div className="partner">
@@ -113,20 +117,20 @@ export function Chat({
               strokeDashoffset={circumference * (1 - ringFraction)}
             />
           </svg>
-          <button type="button" aria-label="More options" onClick={() => setMenu(!menu)}>
+          <MotionButton type="button" aria-label="More options" onClick={() => setMenu(!menu)}>
             <IconMore size={16} />
-          </button>
+          </MotionButton>
           {menu && (
             <div className="chat-menu">
-              <button type="button" onClick={onOpenReport}>
+              <MotionButton type="button" onClick={onOpenReport}>
                 <IconReport size={15} /> Report conversation
-              </button>
-              <button type="button" onClick={onSubmitBlock}>
+              </MotionButton>
+              <MotionButton type="button" onClick={onSubmitBlock}>
                 <IconBlock size={15} /> Block this person
-              </button>
-              <button type="button" onClick={onEndChat}>
+              </MotionButton>
+              <MotionButton type="button" onClick={onEndChat}>
                 <IconEnd size={15} /> End conversation
-              </button>
+              </MotionButton>
             </div>
           )}
         </div>
@@ -141,12 +145,12 @@ export function Chat({
           ) : extendRequestedByPartner ? (
             <>
               <span>{partnerName} wants to keep chatting.</span>
-              <button type="button" onClick={onRequestExtend}>Yes, continue</button>
+              <MotionButton type="button" onClick={onRequestExtend}>Yes, continue</MotionButton>
             </>
           ) : (
             <>
               <span>A couple of minutes left — keep chatting?</span>
-              <button type="button" onClick={onRequestExtend}>Yes, continue</button>
+              <MotionButton type="button" onClick={onRequestExtend}>Yes, continue</MotionButton>
             </>
           )}
         </div>
@@ -170,9 +174,9 @@ export function Chat({
         {messages.length === 0 && (
           <div className="icebreakers">
             {icebreakersFor(mode).map((line) => (
-              <button key={line} type="button" onClick={() => setMessage(line)}>
+              <MotionButton key={line} type="button" onClick={() => setMessage(line)}>
                 {line}
-              </button>
+              </MotionButton>
             ))}
           </div>
         )}
@@ -193,12 +197,12 @@ export function Chat({
           onKeyDown={(e) => e.key === "Enter" && onSend()}
           placeholder="Say what's on your mind…"
         />
-        <button type="button" className="send" onClick={onSend} aria-label="Send">
+        <MotionButton type="button" className={`send${message.trim() ? " is-ready" : ""}`} onClick={onSend} aria-label="Send">
           <IconSend size={16} />
-        </button>
+        </MotionButton>
       </div>
       <footer className="chat-footer">
-        <button type="button" onClick={onHelp}>Need help now?</button>
+        <MotionButton type="button" onClick={onHelp}>Need help now?</MotionButton>
         <span>{socketStatus === "live" ? "Live — messages saved to this conversation" : "Reconnecting securely…"}</span>
       </footer>
 
@@ -207,22 +211,23 @@ export function Chat({
           {reportDone ? (
             <>
               <p>Thank you. Your report was recorded and this person won&apos;t be matched with you again.</p>
-              <button type="button" className="primary wide" onClick={onEndChat}>Continue</button>
+              <MotionButton type="button" className="primary wide" onClick={onEndChat}>Continue</MotionButton>
             </>
           ) : (
             <>
               <p className="modal-copy">What happened? Your report is private and recorded against this person&apos;s account.</p>
               <div className="report-list">
                 {REPORT_REASONS.map((reason) => (
-                  <button key={reason} type="button" disabled={reportSending} onClick={() => onSubmitReport(reason)}>
+                  <MotionButton key={reason} type="button" disabled={reportSending} onClick={() => onSubmitReport(reason)}>
                     {reason}
-                  </button>
+                  </MotionButton>
                 ))}
               </div>
             </>
           )}
         </Modal>
       )}
-    </section>
+      </section>
+    </div>
   );
 }

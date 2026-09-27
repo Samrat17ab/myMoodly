@@ -57,6 +57,14 @@ export function Sanctuary({
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
+  // tokens.css keys a light-on-dark override off data-scene-theme="night" on
+  // <html>, so text stays readable once the night scene is showing -- nothing
+  // was ever setting it, so every screen used dark text even over the night
+  // sky.
+  useEffect(() => {
+    document.documentElement.dataset.sceneTheme = family === "night" ? "dark" : "light";
+  }, [family]);
+
   const paused = reduced || !movementOn || tabHidden || Boolean(pinnedId);
 
   useEffect(() => {
