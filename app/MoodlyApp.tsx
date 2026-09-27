@@ -1,20 +1,19 @@
 "use client";
-/* eslint-disable react/no-unescaped-entities */
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Brand } from "@/app/components/shared/Brand";
 import { Landing } from "@/app/components/screens/Landing";
 import { SignIn } from "@/app/components/screens/SignIn";
+import { Onboarding } from "@/app/components/screens/Onboarding";
 import { Home } from "@/app/components/screens/Home";
 import { Waiting } from "@/app/components/screens/Waiting";
 import { Chat } from "@/app/components/screens/Chat";
 import { ClosingReflection } from "@/app/components/screens/ClosingReflection";
-import { Modal } from "@/app/components/shared/Modal";
+import { Guide } from "@/app/components/screens/Guide";
+import { Settings } from "@/app/components/screens/Settings";
+import { AppHeader } from "@/app/components/shared/AppHeader";
 import { HelpSheet } from "@/app/components/shared/HelpSheet";
 import { Paywall } from "@/app/components/screens/Paywall";
-import { IconHelp } from "@/app/components/icons";
 import { MoodMapStep } from "@/app/components/screens/checkin/MoodMapStep";
 import type { MoodValue } from "@/app/components/shared/MoodMapField";
 import { WordPickerStep } from "@/app/components/screens/checkin/WordPickerStep";
@@ -23,16 +22,9 @@ import { ContextStep } from "@/app/components/screens/checkin/ContextStep";
 import { IntentionStep } from "@/app/components/screens/checkin/IntentionStep";
 import { useReducedMotionSafe } from "@/app/hooks/useReducedMotionSafe";
 import { stepVariants, reducedStepVariants } from "@/app/lib/motion";
+import { emptyProfile, initialsFor, type Profile } from "@/app/lib/profile";
 
 type Quadrant = "red" | "yellow" | "green" | "blue";
-type Profile = {
-  age: string;
-  gender: string;
-  customGender: string;
-  country: string;
-  languages: string[];
-  terms: boolean;
-};
 type ChatMessage = {
   id: string;
   mine: boolean;
@@ -75,17 +67,6 @@ function wordsNear(quadrant: Quadrant, value: MoodValue, count = 10) {
   const start = Math.round(moodIntensity(value) * (list.length - count));
   return list.slice(start, start + count);
 }
-const countries = ["Nepal","India","United States","United Kingdom","Australia","Canada","Germany","France","Japan","Singapore","Other"];
-const languages = ["English","Nepali","Hindi","Spanish","French","German","Mandarin","Japanese"];
-const emptyProfile: Profile = { age:"", gender:"", customGender:"", country:"Nepal", languages:["English"], terms:false };
-
-function initialsFor(nickname: string, email: string) {
-  const words = nickname.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-  const local = email.split("@")[0]?.replace(/[^a-zA-Z]/g, "") ?? "";
-  return (local.slice(0, 2) || "?").toUpperCase();
-}
-
 const VIEW_PATH: Record<View, string> = {
   welcome: "/",
   auth: "/signin",
@@ -709,7 +690,7 @@ export default function MoodlyApp() {
 
   return (
     <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
-      {view !== "chat" && <AppHeader email={email} nickname={nickname} onHome={() => navigate("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
+      {view !== "chat" && <AppHeader initials={initialsFor(nickname, email)} onHome={() => navigate("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
       {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "mood")} onGuide={() => openOverlay("guide")}/>}
       {CHECKIN_VIEWS.has(view) && (
         <div className="checkin-stage">
@@ -839,50 +820,3 @@ export default function MoodlyApp() {
   );
 }
 
-function AppHeader({email,nickname,onHome,onGuide,onHelp,onSettings}:{email:string,nickname:string,onHome:()=>void,onGuide:()=>void,onHelp:()=>void,onSettings:()=>void}){ return <header className="app-header"><button onClick={onHome}><Brand/></button><div className="app-nav"><button onClick={onGuide}>? <b>Guide</b></button><button className="help-now" onClick={onHelp}>♡ Need help now?</button><button className="mini-avatar" onClick={onSettings} title="Account settings">{initialsFor(nickname, email)}</button></div></header>; }
-function Onboarding({profile,setProfile,onDone,toast,onHelp}:{profile:Profile,setProfile:(p:Profile)=>void,onDone:()=>void,toast:string,onHelp:()=>void}){ const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]}); return <main className="onboard-shell"><header><Brand/><span>Private setup · About 1 minute</span></header><section className="onboard-card"><span className="overline">YOUR PRIVATE PROFILE</span><h1>Just enough to keep myMoodly safe.</h1><p>This information is never shown to anyone you match with.</p><div className="form-grid"><label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label><label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>{profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}<label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label><fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset></div><label className="check"><input type="checkbox" checked={profile.terms} onChange={e=>setProfile({...profile,terms:e.target.checked})}/><span>I agree to the <Link href="/terms">Terms & Conditions</Link> and acknowledge the <Link href="/privacy">Privacy Policy</Link>. I understand myMoodly is 18+, anonymous but reportable, and not a crisis service.</span></label><button className="primary wide" onClick={onDone}>Complete setup <span>→</span></button></section>{toast&&<div className="toast">{toast}</div>}<button className="help-pill" onClick={onHelp}><IconHelp size={15}/> Need help now?</button></main>; }
-function Guide({onBack}:{onBack:()=>void}){ const items=[["01","Name what you feel","Two quick questions guide you to one of 100 precise emotion words."],["02","Choose your intention","Talk with someone who feels similar, or someone in a different headspace."],["03","Meet anonymously","You're matched by mood and shared language — never by country, age, or gender."],["04","Talk for 20 minutes","A quiet timer keeps things contained. Continue only when you both agree."],["05","Stay in control","Report or block at any time. Emergency resources are always one tap away."]]; return <section className="guide-view"><button className="back" onClick={onBack}>←</button><span className="overline">HOW MYMOODLY WORKS</span><h1>A small check-in.<br/>A real human moment.</h1><div className="guide-grid">{items.map(x=><div key={x[0]}><i>{x[0]}</i><b>{x[1]}</b><p>{x[2]}</p></div>)}</div><div className="guide-limit"><b>10 conversations a day are free.</b><span></span></div></section>; }
-function Settings({profile,setProfile,email,nickname,usage,busy,onBack,onSave,onSignOut,onDeleteAccount,feedbackSending,onSendFeedback}:{profile:Profile,setProfile:(p:Profile)=>void,email:string,nickname:string,usage:number,busy:boolean,onBack:()=>void,onSave:()=>void,onSignOut:()=>void,onDeleteAccount:()=>void,feedbackSending:boolean,onSendFeedback:(body:string,afterSend:()=>void)=>void}){
-  const [confirmDelete,setConfirmDelete]=useState(false);
-  const [feedbackText,setFeedbackText]=useState("");
-  const toggle=(l:string)=>setProfile({...profile,languages:profile.languages.includes(l)?profile.languages.filter((x:string)=>x!==l):[...profile.languages,l]});
-  return <section className="settings-view">
-    <button className="back" onClick={onBack}>←</button>
-    <span className="overline">ACCOUNT SETTINGS</span>
-    <h1>Your private profile</h1>
-    <p>These details are never visible to conversation partners.</p>
-    <div className="settings-card">
-      <span className="avatar large-avatar">{initialsFor(nickname, email)}</span>
-      <div><b>Signed in as</b><p>{email}</p><p>Conversation partners see you as <b>{nickname || "…"}</b> · changes every 24 hours</p></div>
-    </div>
-    <div className="settings-card">
-      <span className="avatar large-avatar">◔</span>
-      <div><b>Today's connections</b><p>{usage} of 10 free connections used · resets at midnight UTC</p></div>
-    </div>
-    <div className="form-grid">
-      <label>Age <span>18+ only</span><input type="number" min="18" max="100" value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})} placeholder="Your age"/></label>
-      <label>Gender<select value={profile.gender} onChange={e=>setProfile({...profile,gender:e.target.value})}><option value="">Choose an option</option><option>Woman</option><option>Man</option><option>Non-binary</option><option>Prefer not to say</option><option>Self-describe</option></select></label>
-      {profile.gender==="Self-describe"&&<label className="full">How you describe yourself<input value={profile.customGender} onChange={e=>setProfile({...profile,customGender:e.target.value})}/></label>}
-      <label>Country<select value={profile.country} onChange={e=>setProfile({...profile,country:e.target.value})}>{countries.map(c=><option key={c}>{c}</option>)}</select></label>
-      <fieldset><legend>Languages you know <span>Optional</span></legend><div className="language-list">{languages.map(l=><button type="button" className={profile.languages.includes(l)?"active":""} onClick={()=>toggle(l)} key={l}>{l}{profile.languages.includes(l)&&" ✓"}</button>)}</div></fieldset>
-    </div>
-    <button className="primary" disabled={busy} onClick={onSave}>Save changes</button>
-    <div className="settings-card feedback-card">
-      <div>
-        <b>Send feedback to the myMoodly team</b>
-        <p>Tell us what's missing, what's confusing, or what would make this better for you.</p>
-        <div className="note-box"><textarea value={feedbackText} maxLength={1000} onChange={e=>setFeedbackText(e.target.value)} placeholder="What would make myMoodly better for you?"/><span>{feedbackText.length}/1000</span></div>
-        <button className="primary" disabled={feedbackSending || !feedbackText.trim()} onClick={()=>onSendFeedback(feedbackText.trim(), ()=>setFeedbackText(""))}>{feedbackSending ? "Sending…" : "Send feedback"}</button>
-      </div>
-    </div>
-    <div className="settings-actions">
-      <button className="text-button skip" disabled={busy} onClick={onSignOut}>{busy?"Working…":"Sign out"}</button>
-      <button className="text-button skip danger" disabled={busy} onClick={()=>setConfirmDelete(true)}>Delete account &amp; data</button>
-    </div>
-    {confirmDelete&&<Modal title="Delete your account?" onClose={()=>setConfirmDelete(false)}>
-      <p className="modal-copy">This permanently deletes your profile, mood check-ins, and conversation history. This can&apos;t be undone. Any feedback you&apos;ve sent us or reports tied to your account are kept as safety records, as described in our <Link href="/privacy">Privacy Policy</Link>.</p>
-      <button className="primary wide danger-solid" disabled={busy} onClick={()=>{setConfirmDelete(false);onDeleteAccount();}}>{busy?"Deleting…":"Yes, delete everything"}</button>
-      <button className="text-button skip" disabled={busy} onClick={()=>setConfirmDelete(false)}>Cancel</button>
-    </Modal>}
-  </section>;
-}
