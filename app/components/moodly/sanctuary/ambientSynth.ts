@@ -136,17 +136,17 @@ export function startAmbientSynth(ctx: AudioContext, scene: SceneId, volume: num
   const cleanups: (() => void)[] = [];
 
   if (scene === 'dawn-lake') {
-    sources.push(...bed(ctx, master, buffer, 'lowpass', 500, 0.35, 0.08, 0.1)); // soft air
+    sources.push(...bed(ctx, master, buffer, 'lowpass', 500, 0.105, 0.08, 0.03)); // soft air
     sources.push(...bed(ctx, master, buffer, 'bandpass', 900, 0.25, 0.3, 0.12)); // lapping water
     cleanups.push(birds(ctx, master, 0.05, [2500, 7000]));
   } else if (scene === 'day-meadow') {
-    sources.push(...bed(ctx, master, buffer, 'lowpass', 800, 0.45, 0.12, 0.25)); // breeze
+    sources.push(...bed(ctx, master, buffer, 'lowpass', 800, 0.135, 0.12, 0.075)); // breeze
     cleanups.push(birds(ctx, master, 0.06, [1800, 5000]));
   } else if (scene === 'golden-shore') {
-    sources.push(...bed(ctx, master, buffer, 'lowpass', 600, 0.55, 0.09, 0.45)); // slow waves
+    sources.push(...bed(ctx, master, buffer, 'lowpass', 600, 0.165, 0.09, 0.135)); // slow waves
     sources.push(...bed(ctx, master, buffer, 'highpass', 2500, 0.06, 0.09, 0.05)); // foam hiss
   } else {
-    sources.push(...bed(ctx, master, buffer, 'lowpass', 350, 0.4, 0.06, 0.2)); // night wind
+    sources.push(...bed(ctx, master, buffer, 'lowpass', 350, 0.12, 0.06, 0.06)); // night wind
     sources.push(...crickets(ctx, master, 4300, 0.018));
     sources.push(...crickets(ctx, master, 4700, 0.012));
   }
