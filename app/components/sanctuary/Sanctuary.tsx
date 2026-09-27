@@ -13,6 +13,7 @@ import { useSceneFamily } from "./useSceneFamily";
 import { useReducedMotionSafe } from "@/app/hooks/useReducedMotionSafe";
 import { useStoredValue, writeStored } from "@/app/hooks/useStoredValue";
 import { OVERLAY_COMPONENTS } from "./overlays";
+import { IllustrationView } from "./illustrations/IllustrationView";
 import { useAmbientAudio } from "./useAmbientAudio";
 import { SceneControls } from "./SceneControls";
 
@@ -101,6 +102,7 @@ export function Sanctuary({
             {scene.video && !reduced && (
               <video className="sanctuary-video" autoPlay muted loop playsInline src={scene.video} />
             )}
+            {!scene.poster && !scene.video && <IllustrationView family={scene.family} />}
             {mode !== "receded" &&
               scene.overlays.map((kind) => {
                 const Overlay = OVERLAY_COMPONENTS[kind];

@@ -1,0 +1,13 @@
+import { chromium } from "playwright";
+const [, , route = "/", sceneId = "day-meadow-horses"] = process.argv;
+const base = process.env.MOODLY_BASE_URL ?? "http://localhost:3000";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const errors = [];
+page.on("pageerror", (e) => errors.push(String(e)));
+page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+await page.addInitScript((id) => window.localStorage.setItem("moodly:pinned-scene", id), sceneId);
+await page.goto(`${base}${route}`, { waitUntil: "load", timeout: 30000 });
+await page.waitForTimeout(2500);
+console.log(errors.length ? errors.join("\n---\n") : "NO CONSOLE ERRORS");
+await browser.close();

@@ -265,3 +265,68 @@
     animation: none !important;
   }
 }
+
+/* --- Hand-illustrated scene backdrops (one per time-of-day family) ---
+   Layered on top of the flat gradient poster, underneath the existing
+   overlay effects (clouds/stars/aurora/etc. from overlays.tsx). */
+.illustration-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.illustration-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.illustration-scene--night {
+  background: linear-gradient(180deg, #06121a 0%, #0c2630 55%, #173f43 82%, #081a20 100%);
+}
+
+@keyframes illustration-ken { from { transform: scale(1); } to { transform: scale(1.045); } }
+@keyframes illustration-breathe { 0%, 100% { transform: scale(0.84); } 40% { transform: scale(1); } }
+@keyframes illustration-halo { 0%, 100% { transform: scale(0.75); opacity: 0.3; } 40% { transform: scale(1.12); opacity: 0.75; } }
+@keyframes illustration-ripple { 0%, 100% { opacity: 0.1; } 50% { opacity: 0.6; } }
+@keyframes illustration-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes illustration-graze { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(14px); } }
+@keyframes illustration-wave { 0%, 100% { transform: translateX(-30px); } 50% { transform: translateX(30px); } }
+@keyframes illustration-wash { 0%, 100% { transform: translateY(0); opacity: 0.55; } 50% { transform: translateY(-12px); opacity: 0.85; } }
+@keyframes illustration-fly { from { transform: translate(-160px, 0); } to { transform: translate(1640px, -90px); } }
+@keyframes illustration-mist-drift { 0%, 100% { transform: translateX(-70px); } 50% { transform: translateX(70px); } }
+@keyframes illustration-cloud-drift { from { transform: translateX(-30vw); } to { transform: translateX(130vw); } }
+
+.illustration-scene .illustration-anim-ken { animation: illustration-ken 70s ease-in-out infinite alternate; transform-origin: 50% 60%; transform-box: view-box; }
+.illustration-scene .illustration-anim-breathe { animation: illustration-breathe 10s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.illustration-scene .illustration-anim-halo { animation: illustration-halo 10s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.illustration-scene .illustration-anim-ripple { animation: illustration-ripple 6s ease-in-out infinite; }
+.illustration-scene .illustration-anim-sway { animation: illustration-sway 6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.illustration-scene .illustration-anim-graze { animation: illustration-graze 30s ease-in-out infinite; }
+.illustration-scene .illustration-anim-wave { animation: illustration-wave 9s ease-in-out infinite; transform-box: fill-box; }
+.illustration-scene .illustration-anim-wash { animation: illustration-wash 8s ease-in-out infinite; transform-box: fill-box; }
+.illustration-scene .illustration-anim-fly { animation: illustration-fly 52s linear infinite; }
+
+.illustration-mist {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  filter: blur(28px);
+  animation: illustration-mist-drift 40s ease-in-out infinite;
+}
+.illustration-cloud {
+  position: absolute;
+  left: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.82);
+  filter: blur(16px);
+  animation: illustration-cloud-drift 160s linear infinite;
+}
+
+.sanctuary[data-motion="off"] .illustration-scene * {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .illustration-scene * {
+    animation: none !important;
+  }
+}
