@@ -23,7 +23,7 @@ test("uses secure email and Google authentication instead of the demo login", as
   const [app, signInScreen, requestRoute, verifyRoute, sessionRoute, googleStart, googleCallback, accessAuth, smtp] =
     await Promise.all([
       readFile(projectFile("app/MoodlyApp.tsx"), "utf8"),
-      readFile(projectFile("app/components/screens/SignIn.tsx"), "utf8"),
+      readFile(projectFile("app/components/moodly/auth/SignInPanel.tsx"), "utf8"),
       readFile(projectFile("app/api/auth/request-code/route.ts"), "utf8"),
       readFile(projectFile("app/api/auth/verify-otp/route.ts"), "utf8"),
       readFile(projectFile("app/api/auth/session/route.ts"), "utf8"),
@@ -32,14 +32,14 @@ test("uses secure email and Google authentication instead of the demo login", as
       readFile(projectFile("worker/access-auth.ts"), "utf8"),
       readFile(projectFile("worker/smtp.ts"), "utf8"),
     ]);
-  // The sign-in UI lives in its own component (app/components/screens/SignIn.tsx);
+  // The sign-in UI lives in its own component (app/components/moodly/auth/SignInPanel.tsx);
   // MoodlyApp.tsx only holds the auth request/session plumbing.
   const combined = app + signInScreen;
 
   assert.match(app, /\/api\/auth\/request-code/);
   assert.match(app, /\/api\/auth\/verify-otp/);
   assert.match(app, /\/api\/auth\/session/);
-  assert.match(signInScreen, /\/api\/auth\/google\/start/);
+  assert.match(app, /\/api\/auth\/google\/start/);
   assert.match(signInScreen, /Continue with Google/);
   assert.doesNotMatch(combined, /google-demo@moodly\.local/);
   assert.doesNotMatch(combined, /Open secure sign-in link/);
@@ -101,7 +101,7 @@ test("matches wait three seconds and share partner check-ins", async () => {
   const [realtime, app, chatScreen, loadTest] = await Promise.all([
     readFile(projectFile("worker/realtime.ts"), "utf8"),
     readFile(projectFile("app/MoodlyApp.tsx"), "utf8"),
-    readFile(projectFile("app/components/screens/Chat.tsx"), "utf8"),
+    readFile(projectFile("app/components/moodly/chat/ChatShell.tsx"), "utf8"),
     readFile(projectFile("tests/matchmaking-50-users.mjs"), "utf8"),
   ]);
 
@@ -111,9 +111,9 @@ test("matches wait three seconds and share partner check-ins", async () => {
   assert.match(realtime, /partnerNote:/);
   assert.match(realtime, /chatStartsAt:/);
   assert.match(app, /scheduleMatchedChat/);
-  // The chat UI lives in its own component (app/components/screens/Chat.tsx).
-  assert.match(chatScreen, /partnerName/);
-  assert.match(chatScreen, /check-in/);
+  // The chat UI lives in its own component (app/components/moodly/chat/ChatShell.tsx).
+  assert.match(app, /partnerName/);
+  assert.match(chatScreen, /checked in/);
   assert.match(loadTest, /length: 50/);
   assert.match(loadTest, /conversations\.size, 25/);
 });

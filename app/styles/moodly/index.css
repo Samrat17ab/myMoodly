@@ -1,0 +1,15 @@
+/* myMoodly design system. Imported once from app/globals.css, after the
+   older stylesheets so it wins wherever they overlap.
+   Order matters: tokens -> motion -> sanctuary -> primitives -> screens. */
+@import './tokens.css';
+@import './motion.css';
+@import './sanctuary.css';
+@import './primitives.css';
+@import './landing.css';
+@import './auth.css';
+@import './home.css';
+@import './checkin.css';
+@import './waiting.css';
+@import './chat.css';
+@import './reflection.css';
+@import './pages.css';

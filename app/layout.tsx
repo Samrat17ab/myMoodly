@@ -36,9 +36,12 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // The font variables must live on <html>: the design tokens read them from
+  // :root, and a custom property that's undefined where it's referenced
+  // invalidates the whole font-family (the browser then falls back to Times).
   return (
-    <html lang="en">
-      <body className={`${display.variable} ${body.variable}`}>{children}</body>
+    <html lang="en" className={`${display.variable} ${body.variable}`} data-tone="light" suppressHydrationWarning>
+      <body>{children}</body>
     </html>
   );
 }

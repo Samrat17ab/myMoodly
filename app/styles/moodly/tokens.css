@@ -1,0 +1,142 @@
+/* Design tokens. Fonts come from next/font as --font-display / --font-body. */
+:root {
+  /* brand + nature palette */
+  --mm-pine: #1e4d43;
+  --mm-pine-deep: #123730;
+  --mm-sage: #8fb3a3;
+  --mm-sage-deep: #5e8f82;
+  --mm-mist: #eef3ef;
+  --mm-lichen: #e6e1d2;
+  --mm-dusk: #c49a93;
+  --mm-night: #0f1d21;
+
+  /* mood colours (Moodlight) */
+  --mm-mood-bright: #e8c98a;
+  --mm-mood-settled: #a9c9b4;
+  --mm-mood-stirred: #d9a08c;
+  --mm-mood-heavy: #9db0c4;
+
+  /* type */
+  --mm-font-display: var(--font-display), 'Newsreader', Georgia, serif;
+  --mm-font-body: var(--font-body), 'Figtree', system-ui, sans-serif;
+
+  /* radii by hierarchy: sheets > panels > tiles > chips */
+  --mm-r-sheet: 40px;
+  --mm-r-panel: 32px;
+  --mm-r-tile: 24px;
+  --mm-r-pill: 999px;
+
+  /* motion */
+  --mm-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --mm-dur-micro: 220ms;
+  --mm-dur-ui: 550ms;
+
+  /* light tone (dawn, day, golden): dark text on bright scenes */
+  --mm-bg: #eef3ef;
+  --mm-ink: #123730;
+  --mm-text: #16302a;
+  --mm-text-2: #3b5650;
+  --mm-text-3: #4e6560;
+  --mm-surface: rgba(250, 252, 250, 0.82);
+  --mm-surface-strong: rgba(250, 252, 250, 0.95);
+  --mm-surface-solid: #fafcfa;
+  --mm-line: rgba(30, 77, 67, 0.12);
+  --mm-line-strong: rgba(30, 77, 67, 0.3);
+  --mm-scrim: 238, 243, 239;
+  --mm-primary-bg: #1e4d43;
+  --mm-primary-fg: #f4f8f5;
+  --mm-primary-shadow: 0 14px 34px -14px rgba(18, 55, 48, 0.55);
+  --mm-help: #7a4a43;
+  --mm-help-line: rgba(196, 154, 147, 0.45);
+  --mm-bubble-them: #eef1f5;
+  --mm-bubble-them-fg: #16302a;
+  --mm-bubble-me: #1e4d43;
+  --mm-bubble-me-fg: #f4f8f5;
+  --mm-focus: #5e8f82;
+
+  color-scheme: light;
+}
+
+/* dark tone (night scenes): the provider sets data-tone on <html> */
+:root[data-tone='dark'],
+[data-tone='dark'] {
+  --mm-bg: #0f1d21;
+  --mm-ink: #f1f6f2;
+  --mm-text: #e6efeb;
+  --mm-text-2: #cfddd7;
+  --mm-text-3: #a9bdb6;
+  --mm-surface: rgba(234, 242, 238, 0.08);
+  --mm-surface-strong: rgba(16, 34, 40, 0.92);
+  --mm-surface-solid: #16272e;
+  --mm-line: rgba(234, 242, 238, 0.12);
+  --mm-line-strong: rgba(234, 242, 238, 0.3);
+  --mm-scrim: 7, 20, 26;
+  --mm-primary-bg: #eaf2ee;
+  --mm-primary-fg: #123730;
+  --mm-primary-shadow: 0 14px 34px -16px rgba(0, 0, 0, 0.6);
+  --mm-help: #f1d6d0;
+  --mm-help-line: rgba(241, 214, 208, 0.3);
+  --mm-bubble-them: #1c2c38;
+  --mm-bubble-them-fg: #e6efeb;
+  --mm-bubble-me: #2e6a5c;
+  --mm-bubble-me-fg: #f2f8f5;
+  --mm-focus: #8fb3a3;
+
+  color-scheme: dark;
+}
+
+html {
+  background: var(--mm-bg);
+}
+
+body {
+  margin: 0;
+  background: var(--mm-bg);
+  color: var(--mm-text);
+  font-family: var(--mm-font-body);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 1.2s var(--mm-ease), color 1.2s var(--mm-ease);
+}
+
+:focus-visible {
+  outline: 2px solid var(--mm-focus);
+  outline-offset: 3px;
+}
+
+.mm-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* type scale (1.25) */
+.mm-display {
+  margin: 0;
+  font-family: var(--mm-font-display);
+  font-weight: 300;
+  color: var(--mm-ink);
+  font-optical-sizing: auto;
+  text-wrap: balance;
+}
+.mm-display--xl { font-size: clamp(52px, 7vw, 96px); line-height: 0.98; letter-spacing: -0.028em; }
+.mm-display--lg { font-size: clamp(36px, 4.2vw, 54px); line-height: 1.06; letter-spacing: -0.022em; }
+.mm-display--md { font-size: clamp(30px, 3.2vw, 46px); line-height: 1.1; letter-spacing: -0.018em; }
+.mm-display--sm { font-size: 28px; line-height: 1.2; font-weight: 400; letter-spacing: -0.01em; }
+
+.mm-lede { margin: 0; font-size: clamp(17px, 1.5vw, 21px); line-height: 1.6; color: var(--mm-text-2); max-width: 34em; }
+.mm-body { margin: 0; font-size: 17px; line-height: 1.6; color: var(--mm-text-2); }
+.mm-body strong { color: var(--mm-text); font-weight: 600; }
+.mm-fine { margin: 0; font-size: 14px; line-height: 1.55; color: var(--mm-text-3); }
+.mm-error { margin: 0; font-size: 15px; color: #8a3f37; }
+
+@media (max-width: 720px) {
+  .mm-hide-sm { display: none !important; }
+}
+@media (min-width: 721px) {
+  .mm-show-sm { display: none !important; }
+}

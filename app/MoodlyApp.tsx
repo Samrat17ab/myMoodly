@@ -1,29 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Landing } from "@/app/components/screens/Landing";
-import { SignIn } from "@/app/components/screens/SignIn";
-import { Onboarding } from "@/app/components/screens/Onboarding";
-import { Home } from "@/app/components/screens/Home";
-import { Waiting } from "@/app/components/screens/Waiting";
-import { Chat } from "@/app/components/screens/Chat";
-import { ClosingReflection } from "@/app/components/screens/ClosingReflection";
-import { Guide } from "@/app/components/screens/Guide";
-import { Settings } from "@/app/components/screens/Settings";
-import { AppHeader } from "@/app/components/shared/AppHeader";
-import { HelpSheet } from "@/app/components/shared/HelpSheet";
-import { Paywall } from "@/app/components/screens/Paywall";
-import { MoodMapStep } from "@/app/components/screens/checkin/MoodMapStep";
-import type { MoodValue } from "@/app/components/shared/MoodMapField";
-import { WordPickerStep } from "@/app/components/screens/checkin/WordPickerStep";
-import { QuadrantFallbackStep } from "@/app/components/screens/checkin/QuadrantFallbackStep";
-import { DetailsStep } from "@/app/components/screens/checkin/DetailsStep";
-import { useReducedMotionSafe } from "@/app/hooks/useReducedMotionSafe";
-import { stepVariants, reducedStepVariants } from "@/app/lib/motion";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence } from "framer-motion";
+import { SanctuaryProvider } from "@/app/components/moodly/sanctuary/SanctuaryProvider";
+import { HelpSheet } from "@/app/components/moodly/HelpSheet";
+import { LandingHero } from "@/app/components/moodly/landing/LandingHero";
+import { HowItWorks } from "@/app/components/moodly/landing/HowItWorks";
+import { TryMoodMap } from "@/app/components/moodly/landing/TryMoodMap";
+import { PrivacySection } from "@/app/components/moodly/landing/PrivacySection";
+import { SiteFooter } from "@/app/components/moodly/landing/SiteFooter";
+import { SignInPanel } from "@/app/components/moodly/auth/SignInPanel";
+import { HomeHero } from "@/app/components/moodly/home/HomeHero";
+import { CheckInFlow } from "@/app/components/moodly/checkin/CheckInFlow";
+import type { CheckInPayload } from "@/app/components/moodly/checkin/types";
+import { WaitingRoom } from "@/app/components/moodly/waiting/WaitingRoom";
+import { ChatShell } from "@/app/components/moodly/chat/ChatShell";
+import { ReportSheet } from "@/app/components/moodly/chat/ReportSheet";
+import { ClosingReflection } from "@/app/components/moodly/reflection/ClosingReflection";
+import { Onboarding } from "@/app/components/moodly/pages/Onboarding";
+import { Guide } from "@/app/components/moodly/pages/Guide";
+import { Settings } from "@/app/components/moodly/pages/Settings";
+import { HelpPage } from "@/app/components/moodly/pages/HelpPage";
+import { LimitReached } from "@/app/components/moodly/pages/LimitReached";
+import type { HeaderNav } from "@/app/components/moodly/pages/PageShell";
+import { MOOD_HEX, TO_BACKEND_QUADRANT, describeMood, moodColor } from "@/app/components/moodly/lib/mood";
+import { quadrantOfWord } from "@/app/components/moodly/lib/words";
+import { EMAIL_SIGNIN_ENABLED } from "@/app/lib/config";
 import { emptyProfile, initialsFor, type Profile } from "@/app/lib/profile";
 
-type Quadrant = "red" | "yellow" | "green" | "blue";
+const DAILY_LIMIT = 10;
+const CHAT_TOTAL_SECONDS = 1200;
+const SURVEY_QUESTIONS: { key: "understood" | "change" | "partnerRating"; label: string; options: string[] }[] = [
+  { key: "understood", label: "Did you feel understood in this conversation?", options: ["Yes", "Somewhat", "No"] },
+  { key: "change", label: "How do you feel compared to before?", options: ["Better", "Same", "Worse"] },
+  { key: "partnerRating", label: "How was this match?", options: ["Great", "Okay", "Not for me"] },
+];
+
 type ChatMessage = {
   id: string;
   mine: boolean;
@@ -39,42 +51,15 @@ type RealtimePacket = {
   mine?: boolean;
 };
 type View =
-  | "welcome" | "auth" | "onboarding" | "home" | "mood"
-  | "emotion" | "category" | "context" | "queue" | "chat"
-  | "survey" | "paywall" | "resources" | "guide" | "settings";
+  | "welcome" | "auth" | "onboarding" | "home" | "checkin"
+  | "queue" | "chat" | "survey" | "paywall" | "resources" | "guide" | "settings";
 
-// Check-in steps that share one AnimatePresence crossfade+drift transition.
-const CHECKIN_VIEWS = new Set<View>(["mood", "emotion", "category", "context"]);
-
-const words: Record<Quadrant, string[]> = {
-  red: ["Enraged","Panicked","Stressed","Jittery","Shocked","Furious","Anxious","Livid","Frustrated","Tense","Stunned","Irritated","Fuming","Overwhelmed","Uneasy","Restless","Repulsed","Troubled","Peeved","Nervous","Annoyed","Apprehensive","Displeased","Worried","Bothered"],
-  yellow: ["Surprised","Upbeat","Festive","Exhilarated","Ecstatic","Energized","Elated","Enthusiastic","Optimistic","Excited","Cheerful","Motivated","Inspired","Eager","Playful","Amused","Delighted","Blissful","Thrilled","Hyper","Proud","Joyful","Hopeful","Pleased","Focused"],
-  green: ["At Ease","Content","Loving","Fulfilled","Calm","Secure","Satisfied","Relaxed","Chill","Restful","Blessed","Balanced","Mellow","Thoughtful","Peaceful","Comfortable","Carefree","Sleepy","Complacent","Tranquil","Cozy","Serene","Grateful","Touched","Reflective"],
-  blue: ["Disappointed","Down","Apathetic","Pessimistic","Alienated","Miserable","Lonely","Disheartened","Guilty","Despondent","Hopeless","Empty","Remorseful","Depressed","Sad","Bored","Fatigued","Tired","Exhausted","Numb","Withdrawn","Isolated","Gloomy","Melancholic","Weary"],
-};
-// How far the placed light sits from dead-center (0 = center, 1 = corner),
-// used to pick which slice of the 25-word list to show -- narrows the word
-// step from all 25 down to a nearby handful instead of overwhelming the
-// user with the full grid every time.
-function moodIntensity(value: MoodValue) {
-  const d = Math.hypot(value.pleasant - 0.5, value.energy - 0.5);
-  return Math.min(1, Math.max(0, d / 0.6));
-}
-function wordsNear(quadrant: Quadrant, value: MoodValue, count = 10) {
-  const list = words[quadrant];
-  if (count >= list.length) return list;
-  const start = Math.round(moodIntensity(value) * (list.length - count));
-  return list.slice(start, start + count);
-}
 const VIEW_PATH: Record<View, string> = {
   welcome: "/",
   auth: "/signin",
   onboarding: "/onboarding",
   home: "/home",
-  mood: "/checkin/mood",
-  emotion: "/checkin/emotion",
-  category: "/checkin/category",
-  context: "/checkin/details",
+  checkin: "/checkin",
   queue: "/checkin/matching",
   chat: "/chat",
   survey: "/checkin/survey",
@@ -113,16 +98,19 @@ async function matchRequest(payload: Record<string, unknown>) {
 }
 
 export default function MoodlyApp() {
-  const reducedMotion = useReducedMotionSafe();
+  return (
+    <SanctuaryProvider>
+      <MoodlyScreens />
+    </SanctuaryProvider>
+  );
+}
+
+function MoodlyScreens() {
   const [view, setView] = useState<View>("welcome");
-  const [energy, setEnergy] = useState<"high"|"low"|null>(null);
-  const [pleasant, setPleasant] = useState<boolean|null>(null);
-  const [quadrant, setQuadrant] = useState<Quadrant>("green");
-  const [moodValue, setMoodValue] = useState<MoodValue>({ pleasant: 0.5, energy: 0.5 });
-  const [moodTouched, setMoodTouched] = useState(false);
-  const [emotion, setEmotion] = useState("");
-  const [note, setNote] = useState("");
-  const [mode, setMode] = useState<"similar"|"different">("similar");
+  // The last check-in sent; restored into the flow if a search is cancelled.
+  const [checkIn, setCheckIn] = useState<CheckInPayload | null>(null);
+  const [startingQueue, setStartingQueue] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [queueSeconds, setQueueSeconds] = useState(0);
   const [usage, setUsage] = useState(0);
   const [profile, setProfile] = useState<Profile>(emptyProfile);
@@ -135,11 +123,10 @@ export default function MoodlyApp() {
   const [authSending, setAuthSending] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
   const [feedbackSending, setFeedbackSending] = useState(false);
-  const [chatSeconds, setChatSeconds] = useState(1200);
+  const [chatSeconds, setChatSeconds] = useState(CHAT_TOTAL_SECONDS);
   const [chatExpiresAt, setChatExpiresAt] = useState<number | null>(null);
   const [extendRequestedByMe, setExtendRequestedByMe] = useState(false);
   const [extendRequestedByPartner, setExtendRequestedByPartner] = useState(false);
-  const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [report, setReport] = useState(false);
   const [reportDone, setReportDone] = useState(false);
@@ -158,12 +145,11 @@ export default function MoodlyApp() {
   const [partnerNote, setPartnerNote] = useState("");
   const [socketStatus, setSocketStatus] = useState<"connecting"|"live"|"offline">("offline");
   const [onlineCount, setOnlineCount] = useState(0);
-  const noteRef = useRef<HTMLTextAreaElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const matchTransitionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatStartsAtRef = useRef(0);
   const initialPathRef = useRef(typeof window !== "undefined" ? window.location.pathname : "/");
   const historyPushesRef = useRef(0);
-  const [checkinDirection, setCheckinDirection] = useState<1 | -1>(1);
 
   const navigate = useCallback((next: View, opts?: { replace?: boolean }) => {
     setView(next);
@@ -188,6 +174,20 @@ export default function MoodlyApp() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  const enterChat = useCallback(() => {
+    if (matchTransitionRef.current) clearTimeout(matchTransitionRef.current);
+    matchTransitionRef.current = null;
+    setUsage(value => value + 1);
+    setChatSeconds(CHAT_TOTAL_SECONDS);
+    setChatExpiresAt(null);
+    setExtendRequestedByMe(false);
+    setExtendRequestedByPartner(false);
+    setReport(false);
+    setReportDone(false);
+    setMessages([]);
+    navigate("chat");
+  }, [navigate]);
+
   const scheduleMatchedChat = useCallback((data: Record<string, unknown>) => {
     if (!data.conversationId) return;
     setMatchFound(true);
@@ -196,19 +196,17 @@ export default function MoodlyApp() {
     setPartnerEmotion(String(data.partnerEmotion ?? ""));
     setPartnerNote(String(data.partnerNote ?? ""));
     const startsAt = Date.parse(String(data.chatStartsAt ?? ""));
-    const delay = Number.isNaN(startsAt) ? 0 : Math.max(0, startsAt - Date.now());
+    chatStartsAtRef.current = Number.isNaN(startsAt) ? 0 : startsAt;
+    const delay = Math.max(0, chatStartsAtRef.current - Date.now());
     if (matchTransitionRef.current) clearTimeout(matchTransitionRef.current);
-    matchTransitionRef.current = setTimeout(() => {
-      setUsage(value => value + 1);
-      setChatSeconds(1200);
-      setChatExpiresAt(null);
-      setExtendRequestedByMe(false);
-      setExtendRequestedByPartner(false);
-      setMessages([]);
-      navigate("chat");
-      matchTransitionRef.current = null;
-    }, delay);
-  }, [navigate]);
+    matchTransitionRef.current = setTimeout(enterChat, delay);
+  }, [enterChat]);
+
+  // "Open the conversation" on the found screen: go in now if the shared
+  // start time has passed, otherwise the scheduled transition takes over.
+  const openMatchedChat = () => {
+    if (Date.now() >= chatStartsAtRef.current) enterChat();
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -285,7 +283,7 @@ export default function MoodlyApp() {
         } else if (data.status === "expired" || data.status === "cancelled") {
           active = false;
           setToast("No match was found this time. You can try again.");
-          navigate("context");
+          navigate("checkin");
         } else {
           setCanRelax(Boolean(data.canRelax));
         }
@@ -413,32 +411,6 @@ export default function MoodlyApp() {
       navigate(email ? "home" : "welcome");
     }
   }, [navigate, email]);
-  const navigateCheckin = useCallback((next: View, direction: 1 | -1) => {
-    setCheckinDirection(direction);
-    navigate(next);
-  }, [navigate]);
-  const changeMood = (value: MoodValue) => {
-    setMoodValue(value);
-    setMoodTouched(true);
-  };
-  const pickMoodQuadrant = (nextEnergy: "high"|"low", nextPleasant: boolean) => {
-    setMoodValue({
-      energy: nextEnergy === "high" ? 0.8 : 0.2,
-      pleasant: nextPleasant ? 0.8 : 0.2,
-    });
-    setMoodTouched(true);
-  };
-  const continueFromMood = () => {
-    const nextEnergy = moodValue.energy >= 0.5 ? "high" : "low";
-    const nextPleasant = moodValue.pleasant >= 0.5;
-    const next: Quadrant = nextEnergy === "high" ? (nextPleasant ? "yellow":"red") : (nextPleasant ? "green":"blue");
-    setEnergy(nextEnergy);
-    setPleasant(nextPleasant);
-    if (next !== quadrant) setEmotion("");
-    setQuadrant(next);
-    navigateCheckin("emotion", 1);
-  };
-  const continueFromEmotion = () => { navigateCheckin("context", 1); setTimeout(() => noteRef.current?.focus(), 80); };
   const requestCode = async () => {
     const normalized = email.trim().toLowerCase();
     if (!normalized || authSending || resendSeconds > 0) return;
@@ -544,10 +516,17 @@ export default function MoodlyApp() {
       setAccountBusy(false);
     }
   };
-  const startQueue = async () => {
+  const startQueue = async (payload: CheckInPayload) => {
+    if (startingQueue) return;
+    setCheckIn(payload);
+    setStartingQueue(true);
+    const quadrant = TO_BACKEND_QUADRANT[payload.quadrant];
+    const mode = payload.intent;
     try {
       const data = await saveMoodlyData({
-        type:"check-in", email, energy, pleasant, quadrant, emotion, note,
+        type:"check-in", email,
+        energy:payload.energy, pleasant:payload.pleasantness === "pleasant", quadrant,
+        emotion:payload.word, note:payload.note,
         matchMode:mode,
       });
       const nextCheckInId = String(data.id);
@@ -571,6 +550,8 @@ export default function MoodlyApp() {
       }
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not start matchmaking.");
+    } finally {
+      setStartingQueue(false);
     }
   };
   const cancelQueue = async () => {
@@ -583,7 +564,7 @@ export default function MoodlyApp() {
         return;
       }
       setTicketId("");
-      navigate("context");
+      navigate("checkin");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not cancel matchmaking.");
     }
@@ -603,15 +584,14 @@ export default function MoodlyApp() {
       setRelaxRequesting(false);
     }
   };
-  const send = () => {
-    const clean = message.trim();
+  const send = (text: string) => {
+    const clean = text.trim();
     if (!clean) return;
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       setToast("Reconnecting to the conversation. Please try again.");
       return;
     }
     socketRef.current.send(JSON.stringify({ type:"message", text:clean }));
-    setMessage("");
   };
   const requestExtend = () => {
     if (socketRef.current?.readyState !== WebSocket.OPEN || extendRequestedByMe) return;
@@ -628,6 +608,7 @@ export default function MoodlyApp() {
         understood:survey.understood, moodChange:survey.change, partnerRating:survey.partnerRating,
       });
       setToast("Thanks — your response was saved.");
+      setSurvey({ understood:"", change:"", partnerRating:"" });
       navigate("home");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not save your response.");
@@ -661,157 +642,236 @@ export default function MoodlyApp() {
       endChat();
     }
   };
-  const moodPoint = moodValue;
-  const partnerQuadrant = (Object.entries(words) as [Quadrant, string[]][]).find(([, list]) => list.includes(partnerEmotion))?.[0];
-  const partnerMoodPoint = partnerQuadrant
-    ? { pleasant: partnerQuadrant === "yellow" || partnerQuadrant === "green" ? 1 : 0, energy: partnerQuadrant === "red" || partnerQuadrant === "yellow" ? 1 : 0 }
-    : { pleasant: 0.5, energy: 0.5 };
-  const fmt = (s:number) => `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
-  const partnerInitials = partnerName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
-  const messageTime = (value:string) => {
-    if (value === "Now") return value;
-    const parsed = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
-    return Number.isNaN(parsed.getTime())
-      ? value
-      : parsed.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+  const remaining = Math.max(0, DAILY_LIMIT - usage);
+  const initials = initialsFor(nickname, email);
+  const nav: HeaderNav = {
+    initials,
+    onHome: () => navigate("home"),
+    onGuide: () => openOverlay("guide"),
+    onAccount: () => openOverlay("settings"),
   };
+  const point = checkIn?.point ?? { x: 0.5, y: 0.5 };
+  const myColor = moodColor(point);
+  const partnerQuadrant = quadrantOfWord(partnerEmotion);
+  const partnerColor = partnerQuadrant ? MOOD_HEX[partnerQuadrant] : "#A9C9B4";
+  const partnerInitials = partnerName.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
 
-  if (view === "welcome") return (
-    <Landing
-      onCheckIn={() => navigate("auth")}
-      onSignIn={() => navigate("auth")}
-      onHelp={() => openOverlay("resources")}
-    />
-  );
+  let screen: ReactNode = null;
 
-  if (view === "auth") return <SignIn email={email} setEmail={setEmail} otp={otp} setOtp={setOtp} otpSent={otpSent} sending={authSending} resendSeconds={resendSeconds} toast={toast} onRequestCode={requestCode} onVerifyCode={verifyCode} onReset={() => { setOtpSent(false); setOtp(""); setResendAvailableAt(null); }} onBack={() => navigate("welcome")}/>;
-  if (view === "onboarding") return <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile(() => navigate("home", { replace: true }))} toast={toast} onHelp={() => openOverlay("resources")}/>;
+  if (view === "welcome") {
+    screen = (
+      <main>
+        <LandingHero onSignIn={() => navigate("auth")} />
+        <HowItWorks />
+        <TryMoodMap onSignIn={() => navigate("auth")} />
+        <PrivacySection />
+        <SiteFooter onGuide={() => openOverlay("guide")} />
+      </main>
+    );
+  } else if (view === "auth") {
+    const showOtpEntry = EMAIL_SIGNIN_ENABLED && otpSent;
+    screen = (
+      <SignInPanel
+        onGoogle={() => {
+          setGoogleLoading(true);
+          window.location.assign("/api/auth/google/start");
+        }}
+        onBack={() => navigate("welcome")}
+        loading={googleLoading}
+      >
+        {EMAIL_SIGNIN_ENABLED && (showOtpEntry ? (
+          <div className="mm-auth__form">
+            <p className="mm-body">We sent a 6-digit code to {email}. Enter it below to continue.</p>
+            <label className="mm-field">
+              Verification code
+              <input
+                className="mm-input"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onKeyDown={(e) => e.key === "Enter" && void verifyCode()}
+              />
+            </label>
+            <button type="button" className="mm-btn mm-btn--primary mm-btn--block" disabled={otp.length !== 6 || authSending} onClick={() => void verifyCode()}>
+              {authSending ? "Verifying…" : "Verify and continue"}
+            </button>
+            <button type="button" className="mm-link mm-link--muted" disabled={authSending || resendSeconds > 0} onClick={() => void requestCode()}>
+              {authSending ? "Sending…" : resendSeconds > 0 ? `Resend code in ${resendSeconds}s` : "Resend code"}
+            </button>
+            <button type="button" className="mm-link mm-link--muted" onClick={() => { setOtpSent(false); setOtp(""); setResendAvailableAt(null); }}>
+              Use a different email
+            </button>
+          </div>
+        ) : (
+          <div className="mm-auth__form">
+            <label className="mm-field">
+              Email address
+              <input
+                className="mm-input"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                onKeyDown={(e) => e.key === "Enter" && void requestCode()}
+              />
+            </label>
+            <button type="button" className="mm-btn mm-btn--glass mm-btn--block" disabled={!email.includes("@") || authSending} onClick={() => void requestCode()}>
+              {authSending ? "Sending code…" : "Email me a sign-in code"}
+            </button>
+          </div>
+        ))}
+      </SignInPanel>
+    );
+  } else if (view === "onboarding") {
+    screen = <Onboarding profile={profile} setProfile={setProfile} onDone={() => void saveProfile(() => navigate("home", { replace: true }))} />;
+  } else if (view === "home") {
+    screen = (
+      <HomeHero
+        initials={initials}
+        remaining={remaining}
+        limit={DAILY_LIMIT}
+        onCheckIn={() => navigate(usage >= DAILY_LIMIT ? "paywall" : "checkin")}
+        onHome={nav.onHome}
+        onGuide={nav.onGuide}
+        onAccount={nav.onAccount}
+      />
+    );
+  } else if (view === "checkin") {
+    screen = (
+      <CheckInFlow
+        remaining={remaining}
+        submitting={startingQueue}
+        initial={checkIn ? { point: checkIn.point, word: checkIn.word, note: checkIn.note, intent: checkIn.intent } : null}
+        onSubmit={(payload) => void startQueue(payload)}
+        onExit={() => navigate("home")}
+      />
+    );
+  } else if (view === "queue") {
+    screen = (
+      <WaitingRoom
+        status={matchFound ? "found" : "searching"}
+        color={myColor}
+        word={checkIn?.word ?? null}
+        moodLabel={describeMood(point).label}
+        intent={checkIn?.intent ?? "similar"}
+        elapsedSeconds={queueSeconds}
+        partnerName={partnerName}
+        partnerWord={partnerEmotion || undefined}
+        partnerColor={partnerColor}
+        canRelax={canRelax && !relaxDismissed}
+        relaxRequesting={relaxRequesting}
+        onRelax={() => void requestRelax()}
+        onCancel={() => void cancelQueue()}
+        onOpen={openMatchedChat}
+      />
+    );
+  } else if (view === "chat") {
+    const extendNotice = (
+      <div className="mm-chat__extend" role="status">
+        {extendRequestedByMe && extendRequestedByPartner ? (
+          <span>Extending your conversation…</span>
+        ) : extendRequestedByMe ? (
+          <span>Waiting for {partnerName} to agree to keep chatting…</span>
+        ) : (
+          <>
+            <span>{extendRequestedByPartner ? `${partnerName} wants to keep chatting.` : "A couple of minutes left. Keep chatting?"}</span>
+            <button type="button" className="mm-btn mm-btn--glass mm-btn--sm" onClick={requestExtend}>Yes, continue</button>
+          </>
+        )}
+      </div>
+    );
+    screen = (
+      <>
+        <ChatShell
+          me={{ name: nickname || "You", initials, color: myColor, word: checkIn?.word, note: checkIn?.note }}
+          partner={{ name: partnerName, initials: partnerInitials, color: partnerColor, word: partnerEmotion, note: partnerNote }}
+          messages={messages.map((m) => ({ id: m.id, fromMe: m.mine, text: m.text, sentAt: m.time }))}
+          partnerPresent={socketStatus === "live" && onlineCount >= 2}
+          presenceLabel={socketStatus !== "live" ? "Reconnecting securely…" : onlineCount < 2 ? "Stepped away for a moment" : undefined}
+          secondsLeft={chatSeconds}
+          totalSeconds={CHAT_TOTAL_SECONDS}
+          onSend={send}
+          onEnd={endChat}
+          onReport={() => setReport(true)}
+          onBlock={() => void submitBlock()}
+          endingNotice={extendNotice}
+        />
+        <AnimatePresence>
+          {report && (
+            <ReportSheet
+              done={reportDone}
+              sending={reportSending}
+              onSubmit={(reason) => void submitReport(reason)}
+              onClose={() => { if (!reportSending) { setReport(false); setReportDone(false); } }}
+              onContinue={endChat}
+            />
+          )}
+        </AnimatePresence>
+      </>
+    );
+  } else if (view === "survey") {
+    screen = (
+      <ClosingReflection
+        partnerName={partnerName}
+        before={point}
+        onDone={() => void submitSurvey()}
+        onSkip={() => navigate("home")}
+      >
+        <div className="mm-reflect__questions">
+          {SURVEY_QUESTIONS.map((q) => (
+            <div key={q.key} className="mm-reflect__q" role="radiogroup" aria-label={q.label}>
+              <span className="mm-reflect__q-label">{q.label}</span>
+              <div className="mm-reflect__q-row">
+                {q.options.map((o) => {
+                  const on = survey[q.key] === o;
+                  return (
+                    <button key={o} type="button" role="radio" aria-checked={on} className={`mm-choicepill${on ? " is-on" : ""}`} onClick={() => setSurvey({ ...survey, [q.key]: o })}>
+                      {o}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </ClosingReflection>
+    );
+  } else if (view === "paywall") {
+    screen = <LimitReached nav={nav} limit={DAILY_LIMIT} onBack={() => navigate("home")} />;
+  } else if (view === "resources") {
+    screen = <HelpPage nav={email ? nav : null} country={profile.country} onBack={goBack} onLogo={() => navigate("welcome")} />;
+  } else if (view === "guide") {
+    screen = <Guide nav={email ? nav : null} onBack={goBack} onLogo={() => navigate("welcome")} />;
+  } else if (view === "settings") {
+    screen = (
+      <Settings
+        nav={nav}
+        profile={profile}
+        setProfile={setProfile}
+        email={email}
+        nickname={nickname}
+        usage={usage}
+        limit={DAILY_LIMIT}
+        busy={accountBusy}
+        onBack={goBack}
+        onSave={() => void saveProfile(goBack)}
+        onSignOut={() => void signOut()}
+        onDeleteAccount={() => void deleteAccount()}
+        feedbackSending={feedbackSending}
+        onSendFeedback={(body, afterSend) => void submitFeedback(body, afterSend)}
+      />
+    );
+  }
 
   return (
-    <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
-      {view !== "chat" && <AppHeader initials={initialsFor(nickname, email)} onHome={() => navigate("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
-      {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "mood")} onGuide={() => openOverlay("guide")}/>}
-      {CHECKIN_VIEWS.has(view) && (
-        <div className="checkin-stage">
-        <AnimatePresence custom={checkinDirection}>
-          <motion.div
-            key={view}
-            className="checkin-stage-item"
-            custom={checkinDirection}
-            variants={reducedMotion ? reducedStepVariants : stepVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-          >
-            {view === "mood" && (
-              <MoodMapStep
-                value={moodValue}
-                touched={moodTouched}
-                onChange={changeMood}
-                onQuadrant={pickMoodQuadrant}
-                onContinue={continueFromMood}
-                onBack={() => navigateCheckin("home", -1)}
-              />
-            )}
-            {view === "emotion" && (
-              <WordPickerStep
-                words={wordsNear(quadrant, moodValue)}
-                allWords={words[quadrant]}
-                selected={emotion}
-                mood={moodPoint}
-                onPick={setEmotion}
-                onContinue={continueFromEmotion}
-                onNoneFit={() => navigateCheckin("category", 1)}
-                onBack={() => navigateCheckin("mood", -1)}
-              />
-            )}
-            {view === "category" && (
-              <QuadrantFallbackStep
-                onPick={(q) => { setQuadrant(q); navigateCheckin("emotion", 1); }}
-                onBack={() => navigateCheckin("emotion", -1)}
-              />
-            )}
-            {view === "context" && (
-              <DetailsStep
-                emotion={emotion}
-                mood={moodPoint}
-                note={note}
-                setNote={setNote}
-                noteRef={noteRef}
-                mode={mode}
-                setMode={setMode}
-                usage={usage}
-                onSubmit={() => void startQueue()}
-                onBack={() => navigateCheckin("emotion", -1)}
-              />
-            )}
-          </motion.div>
-        </AnimatePresence>
-        </div>
-      )}
-      {view === "queue" && (
-        <Waiting
-          emotion={emotion}
-          mode={mode}
-          mood={moodPoint}
-          elapsedLabel={fmt(queueSeconds)}
-          matchFound={matchFound}
-          canRelax={canRelax}
-          relaxDismissed={relaxDismissed}
-          relaxRequesting={relaxRequesting}
-          onRelax={() => void requestRelax()}
-          onDismissRelax={() => setRelaxDismissed(true)}
-          onCancel={() => void cancelQueue()}
-        />
-      )}
-      {view === "chat" && (
-        <Chat
-          partnerName={partnerName}
-          partnerInitials={partnerInitials}
-          partnerMood={partnerMoodPoint}
-          partnerEmotion={partnerEmotion}
-          partnerNote={partnerNote}
-          myEmotion={emotion}
-          myNote={note}
-          mode={mode}
-          onlineCount={onlineCount}
-          socketStatus={socketStatus}
-          chatSeconds={chatSeconds}
-          extendRequestedByMe={extendRequestedByMe}
-          extendRequestedByPartner={extendRequestedByPartner}
-          onRequestExtend={requestExtend}
-          message={message}
-          setMessage={setMessage}
-          onSend={send}
-          messages={messages}
-          messageTime={messageTime}
-          onEndChat={endChat}
-          onSubmitBlock={() => void submitBlock()}
-          onHelp={() => openOverlay("resources")}
-          report={report}
-          reportDone={reportDone}
-          reportSending={reportSending}
-          onOpenReport={() => setReport(true)}
-          onCloseReport={() => { if (!reportSending) { setReport(false); setReportDone(false); } }}
-          onSubmitReport={(reason) => void submitReport(reason)}
-        />
-      )}
-      {view === "survey" && (
-        <ClosingReflection
-          emotion={emotion}
-          beforeMood={moodPoint}
-          survey={survey}
-          setSurvey={setSurvey}
-          onSubmit={() => void submitSurvey()}
-          onSkip={() => navigate("home")}
-        />
-      )}
-      {view === "paywall" && <Paywall onBack={() => navigate("home")}/>}
-      {view === "resources" && <HelpSheet country={profile.country} onBack={goBack}/>}
-      {view === "guide" && <Guide onBack={goBack}/>}
-      {view === "settings" && <Settings profile={profile} setProfile={setProfile} email={email} nickname={nickname} usage={usage} busy={accountBusy} onBack={goBack} onSave={() => void saveProfile(goBack)} onSignOut={() => void signOut()} onDeleteAccount={() => void deleteAccount()} feedbackSending={feedbackSending} onSendFeedback={(body, afterSend) => void submitFeedback(body, afterSend)}/>}
-      {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
-    </main>
+    <>
+      {screen}
+      <HelpSheet country={profile.country} />
+      {toast && <div className="mm-toast" role="status" aria-live="polite">{toast}</div>}
+    </>
   );
 }
-

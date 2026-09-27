@@ -1,0 +1,34 @@
+.mm-waiting { position: relative; min-height: 100svh; display: flex; flex-direction: column; isolation: isolate; }
+.mm-waiting__scrim { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse 60% 70% at 50% 50%, rgba(var(--mm-scrim), 0.72) 0%, rgba(var(--mm-scrim), 0) 70%); }
+.mm-waiting > .mm-topbar { z-index: 2; }
+.mm-waiting__main { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; padding: 20px 24px 64px; text-align: center; }
+.mm-waiting__stage { position: relative; width: 240px; height: 220px; display: flex; align-items: center; justify-content: center; }
+.mm-waiting__self,
+.mm-waiting__other { position: absolute; display: flex; align-items: center; justify-content: center; }
+.mm-waiting__ring {
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--mm-mood-stirred) 60%, transparent);
+  animation: mm-ring 5s ease-out infinite;
+}
+.mm-waiting__ring--late { animation-delay: -2.5s; }
+.mm-waiting__copy { display: flex; flex-direction: column; align-items: center; margin-top: 18px; }
+.mm-waiting__cue { position: relative; width: 400px; max-width: 100%; height: 30px; font-size: 16px; color: var(--mm-text-2); }
+.mm-waiting__copy .mm-display { margin-top: 14px; }
+.mm-waiting__eyebrow { margin: 0; font-size: 16px; color: var(--mm-text-2); }
+.mm-waiting__summary { margin-top: 34px; display: flex; border-radius: 26px; overflow: hidden; }
+.mm-waiting__summary > div { width: 280px; padding: 20px 26px; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.mm-waiting__summary > div + div { border-left: 1px solid var(--mm-line); }
+.mm-waiting__summary strong { font-size: 19px; font-weight: 600; color: var(--mm-ink); }
+.mm-waiting__foot { margin-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 520px; }
+.mm-waiting__line { min-height: 3.2em; }
+.mm-waiting__options { margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.mm-waiting__option-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.mm-waiting__foot > .mm-link { margin-top: 10px; }
+@media (max-width: 720px) {
+  .mm-waiting__summary { flex-direction: column; width: 100%; }
+  .mm-waiting__summary > div { width: auto; }
+  .mm-waiting__summary > div + div { border-left: none; border-top: 1px solid var(--mm-line); }
+}

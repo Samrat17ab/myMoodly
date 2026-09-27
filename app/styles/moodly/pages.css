@@ -1,0 +1,109 @@
+/* Screens the reference didn't draw (onboarding, guide, settings, help,
+   limit reached, report), built from the same tokens and primitives:
+   soft Sanctuary behind, a glass panel for reading, mm- type and controls. */
+
+.mm-page { position: relative; min-height: 100svh; display: flex; flex-direction: column; isolation: isolate; }
+.mm-page__main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  box-sizing: border-box;
+  padding: 16px 64px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.mm-page__panel {
+  width: min(760px, 100%);
+  box-sizing: border-box;
+  padding: 44px 48px;
+  border-radius: var(--mm-r-sheet);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 0 40px 80px -50px rgba(18, 55, 48, 0.4);
+}
+.mm-page__panel--wide { width: min(1040px, 100%); }
+.mm-page__head { display: flex; flex-direction: column; gap: 12px; }
+.mm-page__back { align-self: flex-start; }
+.mm-page__section { display: flex; flex-direction: column; gap: 14px; padding-top: 22px; border-top: 1px solid var(--mm-line); }
+.mm-page__actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.mm-page__footer { position: relative; z-index: 2; padding: 0 64px 32px; }
+
+/* fields */
+.mm-fieldgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.mm-field { display: flex; flex-direction: column; gap: 8px; font-size: 15px; font-weight: 500; color: var(--mm-text); }
+.mm-field--full { grid-column: 1 / -1; }
+.mm-field__hint { font-weight: 400; color: var(--mm-text-3); }
+.mm-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 56px;
+  padding: 0 20px;
+  border-radius: 18px;
+  border: 1px solid var(--mm-line-strong);
+  background: var(--mm-surface-strong);
+  color: var(--mm-text);
+  font: 400 17px/1.4 var(--mm-font-body);
+  transition: border-color var(--mm-dur-micro), box-shadow var(--mm-dur-micro);
+}
+.mm-input:focus { outline: none; border-color: var(--mm-sage-deep); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mm-sage) 25%, transparent); }
+select.mm-input { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--mm-text-3) 50%), linear-gradient(135deg, var(--mm-text-3) 50%, transparent 50%); background-position: calc(100% - 26px) 50%, calc(100% - 20px) 50%; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 44px; }
+.mm-field__legend { font-size: 15px; font-weight: 500; color: var(--mm-text); padding: 0; margin: 0 0 10px; }
+.mm-fieldset { border: 0; padding: 0; margin: 0; grid-column: 1 / -1; }
+.mm-chiprow { display: flex; flex-wrap: wrap; gap: 10px; }
+.mm-chiprow .mm-choicepill { padding: 0 18px; display: inline-flex; align-items: center; gap: 8px; }
+.mm-check { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.6; color: var(--mm-text-2); }
+.mm-check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--mm-pine); flex-shrink: 0; }
+.mm-check a { color: var(--mm-ink); }
+
+/* summary rows (settings) */
+.mm-summary { display: flex; align-items: center; gap: 18px; padding: 20px 22px; border-radius: var(--mm-r-tile); background: var(--mm-surface-strong); border: 1px solid var(--mm-line); }
+.mm-summary__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mm-summary__title { font-size: 16px; font-weight: 600; color: var(--mm-text); }
+.mm-summary__detail { margin: 0; font-size: 15px; color: var(--mm-text-2); overflow-wrap: anywhere; }
+.mm-summary__badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--mm-mood-settled); background: var(--mm-surface-solid); font: 700 15px/1 var(--mm-font-body); color: var(--mm-ink); }
+.mm-danger-link { color: #8a3f37; border-color: color-mix(in srgb, #8a3f37 35%, transparent); }
+[data-tone='dark'] .mm-danger-link { color: #f1b3a9; }
+
+/* guide */
+.mm-guide__steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 40px; }
+.mm-guide__step { display: flex; flex-direction: column; gap: 10px; padding-top: 22px; border-top: 1px solid var(--mm-line-strong); }
+.mm-guide__num { font: 300 48px/1 var(--mm-font-display); color: var(--mm-sage-deep); }
+.mm-guide__title { margin: 0; font-size: 19px; font-weight: 600; color: var(--mm-text); }
+
+/* help page */
+.mm-help-tips { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; color: var(--mm-text-2); }
+
+/* toast */
+.mm-toast {
+  position: fixed;
+  z-index: 120;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 40px));
+  box-sizing: border-box;
+  padding: 14px 22px;
+  border-radius: 22px;
+  background: var(--mm-primary-bg);
+  color: var(--mm-primary-fg);
+  font: 500 15px/1.45 var(--mm-font-body);
+  box-shadow: var(--mm-primary-shadow);
+  text-align: center;
+}
+
+/* report sheet */
+.mm-report__list { display: flex; flex-direction: column; gap: 10px; }
+.mm-report__list .mm-choicepill { height: 52px; text-align: left; padding: 0 20px; }
+
+@media (max-width: 720px) {
+  .mm-page__main { padding: 8px 20px 96px; }
+  .mm-page__panel { padding: 32px 24px; border-radius: var(--mm-r-panel); }
+  .mm-fieldgrid,
+  .mm-guide__steps { grid-template-columns: 1fr; }
+  .mm-page__footer { padding: 0 20px 20px; }
+}
+
+.mm-btn--danger { background: #8a3f37; color: #fff; }
+.mm-btn--danger:hover:not(:disabled) { background: #74332c; }
