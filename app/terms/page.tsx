@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Terms & Conditions | myMoodly",
   description:
     "The terms that govern using myMoodly's mood check-ins and anonymous conversations.",
+  alternates: { canonical: "https://mymoodly.space/terms" },
 };
 
 const effectiveDate = "July 31, 2026";

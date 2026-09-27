@@ -107,3 +107,28 @@ select.mm-input { appearance: none; background-image: linear-gradient(45deg, tra
 
 .mm-btn--danger { background: #8a3f37; color: #fff; }
 .mm-btn--danger:hover:not(:disabled) { background: #74332c; }
+
+/* ---------- small screens: no sideways scroll, comfortable tap targets ---------- */
+/* Glows (Moodlight halos, scene edges) may bleed past the screen edge; clip
+   them instead of letting the page scroll sideways. clip, unlike hidden,
+   doesn't create a scroll container, so sticky and fixed layers still work. */
+html,
+body { overflow-x: clip; }
+
+/* Standalone text buttons get a 44px tall hit area without changing their look. */
+button.mm-link,
+.mm-hero__actions .mm-link { display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; }
+.mm-footer__nav a,
+.mm-footer__nav .mm-footer__navbtn { display: inline-flex; align-items: center; min-height: 44px; }
+.mm-chat__below .mm-help { min-height: 44px; padding: 0 12px; }
+
+@media (max-width: 360px) {
+  /* Scene controls and the help pill don't fit side by side on the narrowest phones. */
+  .mm-hero__footer { flex-wrap: wrap; justify-content: flex-start; }
+}
+.legal-brand,
+.legal-home-link,
+.legal-footer a { display: inline-flex; align-items: center; min-height: 44px; }
+.mm-footer__nav .mm-help { min-height: 44px; }
+.mm-logo { min-height: 44px; }
+button.mm-link--muted { padding-inline: 8px; }

@@ -27,6 +27,7 @@ import { MOOD_HEX, TO_BACKEND_QUADRANT, describeMood, moodColor } from "@/app/co
 import { quadrantOfWord } from "@/app/components/moodly/lib/words";
 import { EMAIL_SIGNIN_ENABLED } from "@/app/lib/config";
 import { emptyProfile, initialsFor, type Profile } from "@/app/lib/profile";
+import { PATH_VIEW, VIEW_PATH, type View } from "@/app/lib/routes";
 
 const DAILY_LIMIT = 10;
 const CHAT_TOTAL_SECONDS = 1200;
@@ -50,39 +51,39 @@ type RealtimePacket = {
   expiresAt?: number;
   mine?: boolean;
 };
-type View =
-  | "welcome" | "auth" | "onboarding" | "home" | "checkin"
-  | "queue" | "chat" | "survey" | "paywall" | "resources" | "guide" | "settings";
-
-const VIEW_PATH: Record<View, string> = {
-  welcome: "/",
-  auth: "/signin",
-  onboarding: "/onboarding",
-  home: "/home",
-  checkin: "/checkin",
-  queue: "/checkin/matching",
-  chat: "/chat",
-  survey: "/checkin/survey",
-  paywall: "/upgrade",
-  resources: "/help",
-  guide: "/guide",
-  settings: "/profile",
-};
-const PATH_VIEW = Object.fromEntries(
-  (Object.entries(VIEW_PATH) as [View, string][]).map(([v, p]) => [p, v]),
-) as Record<string, View>;
 // Views it's safe to land on directly from a URL (no in-memory wizard state required).
 const AUTHENTICATED_LANDING_VIEWS = new Set<View>(["home", "guide", "resources", "settings", "paywall"]);
 const PRE_AUTH_LANDING_VIEWS = new Set<View>(["auth", "guide", "resources"]);
 
+// fetch() rejects with a bare TypeError ("Failed to fetch") when the network
+// drops; show something a person can act on instead.
+async function apiFetch(input: string, init?: RequestInit) {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new Error(
+      typeof navigator !== "undefined" && !navigator.onLine
+        ? "You seem to be offline. Check your connection and try again."
+        : "Couldn't reach myMoodly. Check your connection and try again.",
+    );
+  }
+}
+
 async function readApiResponse(response: Response) {
-  const data = await response.json() as Record<string, unknown>;
-  if (!response.ok) throw new Error(String(data.error ?? "myMoodly could not save your data."));
+  // A gateway error or timeout can come back as an HTML page, not JSON.
+  const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) {
+    if (typeof data.error === "string" && data.error) throw new Error(data.error);
+    if (response.status === 401) throw new Error("Your session has ended. Please sign in again.");
+    if (response.status === 429) throw new Error("That's a lot at once. Please wait a moment and try again.");
+    if (response.status >= 500) throw new Error("myMoodly is having trouble right now. Please try again in a moment.");
+    throw new Error("Something didn't work. Please try again.");
+  }
   return data;
 }
 
 async function saveMoodlyData(payload: Record<string, unknown>) {
-  return readApiResponse(await fetch("/api/moodly", {
+  return readApiResponse(await apiFetch("/api/moodly", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
@@ -90,7 +91,7 @@ async function saveMoodlyData(payload: Record<string, unknown>) {
 }
 
 async function matchRequest(payload: Record<string, unknown>) {
-  return readApiResponse(await fetch("/api/match", {
+  return readApiResponse(await apiFetch("/api/match", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
@@ -215,14 +216,14 @@ function MoodlyScreens() {
   }, [toast]);
   const completeSignIn = useCallback(async () => {
     try {
-      const sessionResponse = await fetch("/api/auth/session", {
+      const sessionResponse = await apiFetch("/api/auth/session", {
         cache: "no-store",
       });
       if (!sessionResponse.ok) return false;
       const session = await sessionResponse.json() as { email?: string };
       const authenticatedEmail = session.email?.trim().toLowerCase() ?? "";
       if (!authenticatedEmail) return false;
-      const data = await readApiResponse(await fetch("/api/moodly", {
+      const data = await readApiResponse(await apiFetch("/api/moodly", {
         cache: "no-store",
       }));
       setEmail(authenticatedEmail);
@@ -416,7 +417,7 @@ function MoodlyScreens() {
     if (!normalized || authSending || resendSeconds > 0) return;
     setAuthSending(true);
     try {
-      const data = await readApiResponse(await fetch("/api/auth/request-code", {
+      const data = await readApiResponse(await apiFetch("/api/auth/request-code", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: normalized }),
@@ -441,7 +442,7 @@ function MoodlyScreens() {
     if (!normalized || trimmedCode.length !== 6 || authSending) return;
     setAuthSending(true);
     try {
-      await readApiResponse(await fetch("/api/auth/verify-otp", {
+      await readApiResponse(await apiFetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: normalized, code: trimmedCode }),
@@ -482,7 +483,7 @@ function MoodlyScreens() {
     if (accountBusy) return;
     setAccountBusy(true);
     try {
-      await fetch("/api/auth/session", { method: "DELETE" });
+      await apiFetch("/api/auth/session", { method: "DELETE" });
     } catch {
       // Clearing local state below still signs the user out of this device.
     } finally {
@@ -501,7 +502,7 @@ function MoodlyScreens() {
     if (accountBusy) return;
     setAccountBusy(true);
     try {
-      await readApiResponse(await fetch("/api/moodly", { method: "DELETE" }));
+      await readApiResponse(await apiFetch("/api/moodly", { method: "DELETE" }));
       setEmail("");
       setNickname("");
       setOtp("");

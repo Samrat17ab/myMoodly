@@ -225,7 +225,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 38px;
+  height: 44px;
   padding: 0 14px;
   border: none;
   border-radius: var(--mm-r-pill);
@@ -401,3 +401,23 @@
 }
 .mm-textarea::placeholder { color: var(--mm-text-3); opacity: 0.8; }
 .mm-textarea:focus { outline: none; border-color: var(--mm-sage-deep); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mm-sage) 25%, transparent); }
+
+/* ---------- signed-in menu (phones: the avatar opens it) ---------- */
+.mm-appheader__menuwrap { position: relative; }
+.mm-appmenu {
+  position: absolute;
+  right: 0;
+  top: 56px;
+  z-index: 20;
+  width: 220px;
+  padding: 8px;
+  border-radius: 22px;
+  background: var(--mm-surface-solid);
+  border: 1px solid var(--mm-line);
+  box-shadow: 0 24px 50px -20px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+.mm-appmenu button { height: 48px; padding: 0 14px; border: none; border-radius: 14px; background: none; text-align: left; font: 400 16px/1 var(--mm-font-body); color: var(--mm-text); cursor: pointer; }
+.mm-appmenu button:hover,
+.mm-appmenu button:focus-visible { background: var(--mm-line); }

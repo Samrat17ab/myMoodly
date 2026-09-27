@@ -62,7 +62,8 @@ export function WaitingRoom(props: Props) {
       <div className="mm-waiting__scrim" aria-hidden="true" />
       <header className="mm-topbar">
         <Logo onClick={onCancel} />
-        <HelpButton />
+        <HelpButton className="mm-hide-sm" />
+        <HelpButton variant="icon" className="mm-show-sm" />
       </header>
 
       <main className="mm-waiting__main">

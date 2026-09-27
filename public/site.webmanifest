@@ -1,9 +1,16 @@
 {
   "name": "myMoodly",
   "short_name": "myMoodly",
+  "description": "Name how you feel, then talk it through anonymously with one real person.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#F4F8F5",
+  "background_color": "#0B443D",
   "theme_color": "#0B443D",
-  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }

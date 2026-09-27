@@ -14,8 +14,8 @@
   animation: mm-ring 5s ease-out infinite;
 }
 .mm-waiting__ring--late { animation-delay: -2.5s; }
-.mm-waiting__copy { display: flex; flex-direction: column; align-items: center; margin-top: 18px; }
-.mm-waiting__cue { position: relative; width: 400px; max-width: 100%; height: 30px; font-size: 16px; color: var(--mm-text-2); }
+.mm-waiting__copy { width: 100%; max-width: 720px; display: flex; flex-direction: column; align-items: center; margin-top: 18px; }
+.mm-waiting__cue { position: relative; width: 100%; max-width: 400px; height: 30px; font-size: 16px; color: var(--mm-text-2); }
 .mm-waiting__copy .mm-display { margin-top: 14px; }
 .mm-waiting__eyebrow { margin: 0; font-size: 16px; color: var(--mm-text-2); }
 .mm-waiting__summary { margin-top: 34px; display: flex; border-radius: 26px; overflow: hidden; }

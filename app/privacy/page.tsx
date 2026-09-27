@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Privacy Policy | myMoodly",
   description:
     "How myMoodly collects, uses, stores, and protects personal information.",
+  alternates: { canonical: "https://mymoodly.space/privacy" },
 };
 
 const effectiveDate = "August 23, 2026";
