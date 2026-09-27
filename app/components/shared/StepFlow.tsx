@@ -7,7 +7,7 @@ import { MotionButton } from "./MotionButton";
 import { entrance, reducedEntrance } from "@/app/lib/motion";
 import { useReducedMotionSafe } from "@/app/hooks/useReducedMotionSafe";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 
 /** Consistent step indicator + a back button that sits in normal flex flow
  * (never absolutely overlapping the header, unlike the legacy .panel/.back

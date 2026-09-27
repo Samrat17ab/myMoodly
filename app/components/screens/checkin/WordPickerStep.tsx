@@ -29,7 +29,7 @@ export function WordPickerStep({
   onBack: () => void;
 }) {
   return (
-    <StepFlow step={3} title="Which word feels closest?" subtitle="Pick the one that best names this moment." onBack={onBack} mood={mood}>
+    <StepFlow step={2} title="Which word feels closest?" subtitle="Pick the one that best names this moment." onBack={onBack} mood={mood}>
       <motion.div className="word-grid" variants={container} initial="hidden" animate="visible">
         {words.map((word) => (
           <motion.button

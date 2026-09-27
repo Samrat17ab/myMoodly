@@ -21,7 +21,7 @@ export function IntentionStep({
 }) {
   return (
     <StepFlow
-      step={5}
+      step={4}
       title="Who would feel right to talk to?"
       subtitle="You can choose differently every time you check in."
       onBack={onBack}

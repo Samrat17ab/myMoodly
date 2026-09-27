@@ -22,7 +22,7 @@ export function QuadrantFallbackStep({
   onBack: () => void;
 }) {
   return (
-    <StepFlow step={3} title="Let's try another direction" subtitle="Choose the broad feeling that feels nearest." onBack={onBack}>
+    <StepFlow step={2} title="Let's try another direction" subtitle="Choose the broad feeling that feels nearest." onBack={onBack}>
       <div className="category-grid">
         {CATEGORIES.map((c) => (
           <MotionButton key={c.quadrant} onClick={() => onPick(c.quadrant)}>

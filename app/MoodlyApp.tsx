@@ -15,8 +15,8 @@ import { Modal } from "@/app/components/shared/Modal";
 import { HelpSheet } from "@/app/components/shared/HelpSheet";
 import { Paywall } from "@/app/components/screens/Paywall";
 import { IconHelp } from "@/app/components/icons";
-import { EnergyStep } from "@/app/components/screens/checkin/EnergyStep";
-import { PleasantnessStep } from "@/app/components/screens/checkin/PleasantnessStep";
+import { MoodMapStep } from "@/app/components/screens/checkin/MoodMapStep";
+import type { MoodValue } from "@/app/components/shared/MoodMapField";
 import { WordPickerStep } from "@/app/components/screens/checkin/WordPickerStep";
 import { QuadrantFallbackStep } from "@/app/components/screens/checkin/QuadrantFallbackStep";
 import { ContextStep } from "@/app/components/screens/checkin/ContextStep";
@@ -48,12 +48,12 @@ type RealtimePacket = {
   mine?: boolean;
 };
 type View =
-  | "welcome" | "auth" | "onboarding" | "home" | "energy" | "pleasantness"
+  | "welcome" | "auth" | "onboarding" | "home" | "mood"
   | "emotion" | "category" | "context" | "mode" | "queue" | "chat"
   | "survey" | "paywall" | "resources" | "guide" | "settings";
 
 // Check-in steps that share one AnimatePresence crossfade+drift transition.
-const CHECKIN_VIEWS = new Set<View>(["energy", "pleasantness", "emotion", "category", "context", "mode"]);
+const CHECKIN_VIEWS = new Set<View>(["mood", "emotion", "category", "context", "mode"]);
 
 const words: Record<Quadrant, string[]> = {
   red: ["Enraged","Panicked","Stressed","Jittery","Shocked","Furious","Anxious","Livid","Frustrated","Tense","Stunned","Irritated","Fuming","Overwhelmed","Uneasy","Restless","Repulsed","Troubled","Peeved","Nervous","Annoyed","Apprehensive","Displeased","Worried","Bothered"],
@@ -61,6 +61,20 @@ const words: Record<Quadrant, string[]> = {
   green: ["At Ease","Content","Loving","Fulfilled","Calm","Secure","Satisfied","Relaxed","Chill","Restful","Blessed","Balanced","Mellow","Thoughtful","Peaceful","Comfortable","Carefree","Sleepy","Complacent","Tranquil","Cozy","Serene","Grateful","Touched","Reflective"],
   blue: ["Disappointed","Down","Apathetic","Pessimistic","Alienated","Miserable","Lonely","Disheartened","Guilty","Despondent","Hopeless","Empty","Remorseful","Depressed","Sad","Bored","Fatigued","Tired","Exhausted","Numb","Withdrawn","Isolated","Gloomy","Melancholic","Weary"],
 };
+// How far the placed light sits from dead-center (0 = center, 1 = corner),
+// used to pick which slice of the 25-word list to show -- narrows the word
+// step from all 25 down to a nearby handful instead of overwhelming the
+// user with the full grid every time.
+function moodIntensity(value: MoodValue) {
+  const d = Math.hypot(value.pleasant - 0.5, value.energy - 0.5);
+  return Math.min(1, Math.max(0, d / 0.6));
+}
+function wordsNear(quadrant: Quadrant, value: MoodValue, count = 10) {
+  const list = words[quadrant];
+  if (count >= list.length) return list;
+  const start = Math.round(moodIntensity(value) * (list.length - count));
+  return list.slice(start, start + count);
+}
 const countries = ["Nepal","India","United States","United Kingdom","Australia","Canada","Germany","France","Japan","Singapore","Other"];
 const languages = ["English","Nepali","Hindi","Spanish","French","German","Mandarin","Japanese"];
 const emptyProfile: Profile = { age:"", gender:"", customGender:"", country:"Nepal", languages:["English"], terms:false };
@@ -77,8 +91,7 @@ const VIEW_PATH: Record<View, string> = {
   auth: "/signin",
   onboarding: "/onboarding",
   home: "/home",
-  energy: "/checkin/energy",
-  pleasantness: "/checkin/pleasantness",
+  mood: "/checkin/mood",
   emotion: "/checkin/emotion",
   category: "/checkin/category",
   context: "/checkin/note",
@@ -126,6 +139,8 @@ export default function MoodlyApp() {
   const [energy, setEnergy] = useState<"high"|"low"|null>(null);
   const [pleasant, setPleasant] = useState<boolean|null>(null);
   const [quadrant, setQuadrant] = useState<Quadrant>("green");
+  const [moodValue, setMoodValue] = useState<MoodValue>({ pleasant: 0.5, energy: 0.5 });
+  const [moodTouched, setMoodTouched] = useState(false);
   const [emotion, setEmotion] = useState("");
   const [note, setNote] = useState("");
   const [mode, setMode] = useState<"similar"|"different">("similar");
@@ -423,13 +438,23 @@ export default function MoodlyApp() {
     setCheckinDirection(direction);
     navigate(next);
   }, [navigate]);
-  const chooseEnergy = (value: "high"|"low") => {
-    setEnergy(value);
-    navigateCheckin("pleasantness", 1);
+  const changeMood = (value: MoodValue) => {
+    setMoodValue(value);
+    setMoodTouched(true);
   };
-  const continueFromPleasant = (value: boolean) => {
-    setPleasant(value);
-    const next = energy === "high" ? (value ? "yellow":"red") : (value ? "green":"blue");
+  const pickMoodQuadrant = (nextEnergy: "high"|"low", nextPleasant: boolean) => {
+    setMoodValue({
+      energy: nextEnergy === "high" ? 0.8 : 0.2,
+      pleasant: nextPleasant ? 0.8 : 0.2,
+    });
+    setMoodTouched(true);
+  };
+  const continueFromMood = () => {
+    const nextEnergy = moodValue.energy >= 0.5 ? "high" : "low";
+    const nextPleasant = moodValue.pleasant >= 0.5;
+    const next: Quadrant = nextEnergy === "high" ? (nextPleasant ? "yellow":"red") : (nextPleasant ? "green":"blue");
+    setEnergy(nextEnergy);
+    setPleasant(nextPleasant);
     setQuadrant(next);
     navigateCheckin("emotion", 1);
   };
@@ -656,7 +681,7 @@ export default function MoodlyApp() {
       endChat();
     }
   };
-  const moodPoint = { pleasant: pleasant === false ? 0 : 1, energy: energy === "low" ? 0 : 1 };
+  const moodPoint = moodValue;
   const partnerQuadrant = (Object.entries(words) as [Quadrant, string[]][]).find(([, list]) => list.includes(partnerEmotion))?.[0];
   const partnerMoodPoint = partnerQuadrant
     ? { pleasant: partnerQuadrant === "yellow" || partnerQuadrant === "green" ? 1 : 0, energy: partnerQuadrant === "red" || partnerQuadrant === "yellow" ? 1 : 0 }
@@ -685,7 +710,7 @@ export default function MoodlyApp() {
   return (
     <main className={`app-shell ${view === "chat" ? "chat-bg":""}`}>
       {view !== "chat" && <AppHeader email={email} nickname={nickname} onHome={() => navigate("home")} onGuide={() => openOverlay("guide")} onHelp={() => openOverlay("resources")} onSettings={() => openOverlay("settings")}/>}
-      {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "energy")} onGuide={() => openOverlay("guide")}/>}
+      {view === "home" && <Home usage={usage} onStart={() => navigate(usage >= 10 ? "paywall" : "mood")} onGuide={() => openOverlay("guide")}/>}
       {CHECKIN_VIEWS.has(view) && (
         <div className="checkin-stage">
         <AnimatePresence custom={checkinDirection}>
@@ -698,19 +723,23 @@ export default function MoodlyApp() {
             animate="center"
             exit="exit"
           >
-            {view === "energy" && (
-              <EnergyStep onChoose={chooseEnergy} onBack={() => navigateCheckin("home", -1)}/>
-            )}
-            {view === "pleasantness" && (
-              <PleasantnessStep onChoose={continueFromPleasant} onBack={() => navigateCheckin("energy", -1)}/>
+            {view === "mood" && (
+              <MoodMapStep
+                value={moodValue}
+                touched={moodTouched}
+                onChange={changeMood}
+                onQuadrant={pickMoodQuadrant}
+                onContinue={continueFromMood}
+                onBack={() => navigateCheckin("home", -1)}
+              />
             )}
             {view === "emotion" && (
               <WordPickerStep
-                words={words[quadrant]}
+                words={wordsNear(quadrant, moodValue)}
                 mood={moodPoint}
                 onChoose={chooseEmotion}
                 onNoneFit={() => navigateCheckin("category", 1)}
-                onBack={() => navigateCheckin("pleasantness", -1)}
+                onBack={() => navigateCheckin("mood", -1)}
               />
             )}
             {view === "category" && (

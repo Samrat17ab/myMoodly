@@ -24,7 +24,7 @@ export function ContextStep({
   onBack: () => void;
 }) {
   return (
-    <StepFlow step={4} onBack={onBack} mood={mood} wide>
+    <StepFlow step={3} onBack={onBack} mood={mood} wide>
       <div className="feeling-chip">
         You&apos;re feeling <b>{emotion}</b>
       </div>
