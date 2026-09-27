@@ -935,7 +935,11 @@
   background: rgba(250, 252, 250, 0.85);
   backdrop-filter: blur(10px);
   border-radius: 26px;
-  min-width: 460px;
+}
+@media (min-width: 801px) {
+  .waiting-view .queue-card {
+    min-width: 460px;
+  }
 }
 .waiting-view .queue-card span {
   text-transform: none;
@@ -983,6 +987,15 @@
   background: rgba(250, 252, 250, 0.95);
   backdrop-filter: blur(20px);
   box-shadow: 0 30px 80px -40px rgba(18, 55, 48, 0.45);
+}
+/* On a phone there's no room to spare for a floating card with margins
+   around it -- the conversation fills the screen edge to edge instead. */
+@media (max-width: 800px) {
+  .chat-view {
+    margin-top: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
 }
 .chat-ring {
   transform: rotate(-90deg);
