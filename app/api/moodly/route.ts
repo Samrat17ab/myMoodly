@@ -60,9 +60,11 @@ export async function GET(request: Request) {
                 nickname, nickname_assigned_at
          FROM profiles WHERE email = ? LIMIT 1`,
       ).bind(email),
+      // Only conversations actually joined count toward the daily limit: a
+      // check-in is saved when a search starts, before any match exists.
       d1.prepare(
-        `SELECT COUNT(*) AS count FROM check_ins
-         WHERE user_email = ? AND created_at >= datetime('now', 'start of day')`,
+        `SELECT COUNT(*) AS count FROM conversation_members
+         WHERE user_email = ? AND joined_at >= datetime('now', 'start of day')`,
       ).bind(email),
     ]);
 

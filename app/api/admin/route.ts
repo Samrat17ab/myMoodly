@@ -55,8 +55,8 @@ export async function GET(request: Request) {
         d1.prepare("SELECT mood_change, COUNT(*) AS n FROM conversation_surveys WHERE mood_change IS NOT NULL AND mood_change != '' GROUP BY mood_change"),
         d1.prepare(
           `SELECT COUNT(*) AS n FROM (
-             SELECT user_email FROM check_ins
-             WHERE created_at >= datetime('now', 'start of day')
+             SELECT user_email FROM conversation_members
+             WHERE joined_at >= datetime('now', 'start of day')
              GROUP BY user_email HAVING COUNT(*) >= 10
            )`,
         ),
