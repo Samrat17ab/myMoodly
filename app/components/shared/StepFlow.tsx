@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { IconBack } from "@/app/components/icons";
 import { Moodlight, type MoodPoint } from "./Moodlight";
 import { MotionButton } from "./MotionButton";
-import { entrance } from "@/app/lib/motion";
+import { entrance, reducedEntrance } from "@/app/lib/motion";
+import { useReducedMotionSafe } from "@/app/hooks/useReducedMotionSafe";
 
 const TOTAL_STEPS = 5;
 
@@ -28,6 +29,7 @@ export function StepFlow({
   wide?: boolean;
   children: ReactNode;
 }) {
+  const reduced = useReducedMotionSafe();
   return (
     <section className={`step-flow ${wide ? "step-flow-wide" : ""}`}>
       <div className="step-flow-head">
@@ -49,7 +51,7 @@ export function StepFlow({
         <div className="step-flow-head-end">{mood && <Moodlight {...mood} size={28} breathe={false} />}</div>
       </div>
       {(title || subtitle) && (
-        <motion.div className="step-flow-copy" variants={entrance} initial="hidden" animate="visible">
+        <motion.div className="step-flow-copy" variants={reduced ? reducedEntrance : entrance} initial="hidden" animate="visible">
           {title && <h2>{title}</h2>}
           {subtitle && <p>{subtitle}</p>}
         </motion.div>

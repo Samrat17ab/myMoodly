@@ -13,9 +13,15 @@ export const entrance: Variants = {
   }),
 };
 
+// The server always renders as if motion were not reduced (there's no
+// window to read prefers-reduced-motion from), so a client that *does*
+// prefer reduced motion hydrates straight onto whatever `entrance.hidden`
+// left in the DOM (opacity/y/blur included). If this target omitted y/filter,
+// framer-motion would only ever touch opacity and leave the inherited blur
+// stuck in place forever. Naming every property explicitly resets them.
 export const reducedEntrance: Variants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: durations.micro } },
+  hidden: { opacity: 0, y: 0, filter: "blur(0px)" },
+  visible: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: durations.micro } },
 };
 
 // Step-to-step transitions for the check-in flow: crossfade + horizontal
@@ -31,9 +37,9 @@ export const stepVariants: Variants = {
 };
 
 export const reducedStepVariants: Variants = {
-  enter: { opacity: 0 },
-  center: { opacity: 1, transition: { duration: durations.micro } },
-  exit: { opacity: 0, transition: { duration: durations.micro } },
+  enter: { opacity: 0, x: 0 },
+  center: { opacity: 1, x: 0, transition: { duration: durations.micro } },
+  exit: { opacity: 0, x: 0, transition: { duration: durations.micro } },
 };
 
 export function haptic(ms = 8) {

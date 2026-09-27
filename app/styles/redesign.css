@@ -55,6 +55,16 @@
   outline: none;
   box-shadow: var(--focus-ring);
 }
+
+/* legacy.css sets outline:none on these with no replacement -- keyboard
+   focus was otherwise invisible on the OTP/email inputs and the settings
+   select. */
+.auth-form input:focus-visible,
+.settings-view select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-color: var(--pine);
+}
 .mood-map-marker {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -766,13 +776,21 @@
 }
 
 @media (max-width: 800px) {
-  /* .auth-art (with the only other back button) is hidden at this width. */
+  /* .auth-art (with the only other back button) is hidden at this width.
+     Positioned absolute (like every other .back button in the app) so it
+     floats over the form instead of becoming its own centered grid row,
+     which split the screen into two dead-space halves. */
+  .auth-form {
+    position: relative;
+  }
   .auth-form-back {
     display: flex;
     align-items: center;
     justify-content: center;
-    position: static;
-    margin-bottom: var(--space-5);
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    margin-bottom: 0;
   }
   .landing-hero-copy {
     padding: 12vh 24px 0;
