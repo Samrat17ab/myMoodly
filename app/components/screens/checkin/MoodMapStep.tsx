@@ -4,15 +4,26 @@ import { MotionButton } from "@/app/components/shared/MotionButton";
 import { QuadrantTiles } from "@/app/components/shared/QuadrantTiles";
 import { MoodMapField, type MoodValue } from "@/app/components/shared/MoodMapField";
 
-function describe(value: MoodValue) {
-  const energy = value.energy >= 0.5 ? "buzzing" : "quiet";
-  const pleasant = value.pleasant >= 0.5 ? "good" : "difficult";
-  return `Feeling ${pleasant} and ${energy}`;
+const QUADRANT_HINT: Record<string, string> = {
+  Angry: "Maybe anxious, stressed, frustrated or restless.",
+  Happy: "Maybe excited, hopeful, energised or playful.",
+  Calm: "Maybe content, relieved or at ease.",
+  Sad: "Maybe tired, lonely, low or drained.",
+};
+
+function readMood(value: MoodValue) {
+  const energyHigh = value.energy >= 0.5;
+  const pleasant = value.pleasant >= 0.5;
+  const quadrant = energyHigh ? (pleasant ? "Happy" : "Angry") : pleasant ? "Calm" : "Sad";
+  const d = Math.hypot(value.pleasant - 0.5, value.energy - 0.5);
+  const level = d < 0.18 ? "A little " : d > 0.42 ? "Very " : "";
+  return { label: `${level}${level ? quadrant.toLowerCase() : quadrant}`, hint: QUADRANT_HINT[quadrant] };
 }
 
 /** Merges the old separate energy + pleasantness questions into one
- * drag-based mood map, with the four quadrant tiles underneath as a
- * tap-only alternative to dragging. */
+ * drag-based mood map. Two columns, like the rest of the check-in's
+ * reading-plus-controls steps: the field on the left, everything you can
+ * do with it on the right, instead of stacking it all in one column. */
 export function MoodMapStep({
   value,
   touched,
@@ -28,18 +39,34 @@ export function MoodMapStep({
   onContinue: () => void;
   onBack: () => void;
 }) {
+  const { label, hint } = readMood(value);
   return (
-    <StepFlow step={1} title="How are you feeling right now?" subtitle="Drag the light to the spot that feels closest." onBack={onBack}>
-      <div className="mood-map-step-field">
-        <MoodMapField value={value} onChange={onChange} size={280} layoutId="checkin-moodlight" />
-        <p className="reassure" aria-live="polite">
-          {touched ? describe(value) : "There are no wrong answers here."}
-        </p>
-        <p className="reassure">Or choose the feeling that&apos;s closest</p>
-        <QuadrantTiles onPick={onQuadrant} />
-        <MotionButton className="primary large" onClick={onContinue} disabled={!touched}>
-          Continue
-        </MotionButton>
+    <StepFlow
+      step={1}
+      title="Where are you right now?"
+      subtitle="Tap the spot that feels closest. Up is more energy, right feels better."
+      onBack={onBack}
+      className="step-flow-mood"
+    >
+      <div className="mood-map-columns">
+        <MoodMapField value={value} onChange={onChange} size={480} layoutId="checkin-moodlight" />
+        <div className="mood-map-reading">
+          <div>
+            <span className="mood-map-reading-eyebrow">{touched ? "Your light says" : "Your light is waiting"}</span>
+            <div className="mood-map-reading-label" aria-live="polite">
+              {touched ? label : "Somewhere in the middle"}
+            </div>
+            <p className="mood-map-reading-hint">{touched ? hint : "Tap the field, or use the arrow keys once it's focused."}</p>
+            {touched && <p className="mood-map-reading-note">Not quite right? Tap again, as often as you like.</p>}
+          </div>
+          <div>
+            <span className="mood-map-reading-eyebrow">Or choose a feeling area</span>
+            <QuadrantTiles onPick={onQuadrant} />
+            <MotionButton className="primary large mood-map-continue" onClick={onContinue} disabled={!touched}>
+              Continue
+            </MotionButton>
+          </div>
+        </div>
       </div>
     </StepFlow>
   );

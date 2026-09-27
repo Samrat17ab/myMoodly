@@ -19,6 +19,7 @@ export function StepFlow({
   onBack,
   mood,
   wide = false,
+  className,
   children,
 }: {
   step: number;
@@ -27,11 +28,12 @@ export function StepFlow({
   onBack: () => void;
   mood?: MoodPoint;
   wide?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   const reduced = useReducedMotionSafe();
   return (
-    <section className={`step-flow ${wide ? "step-flow-wide" : ""}`}>
+    <section className={`step-flow ${wide ? "step-flow-wide" : ""} ${className ?? ""}`}>
       <div className="step-flow-head">
         <MotionButton className="step-flow-back" onClick={onBack} aria-label="Back">
           <IconBack size={16} />

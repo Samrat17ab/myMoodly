@@ -32,11 +32,8 @@ export function Home({ usage, onStart, onGuide }: { usage: number; onStart: () =
   return (
     <section className="home-view">
       <div className="home-copy">
-        <h1>
-          {greeting(hour)}
-          <br />
-          How are you, really?
-        </h1>
+        <p className="home-greeting">{greeting(hour)}</p>
+        <h1>How are you, really?</h1>
         <p>Take a breath. Name what you&apos;re feeling, then connect with someone who can meet you there.</p>
         <MotionButton className="primary large" onClick={onStart}>
           Start a check-in

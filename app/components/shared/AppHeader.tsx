@@ -24,7 +24,7 @@ export function AppHeader({
         <Brand />
       </MotionButton>
       <nav className="app-header-nav">
-        <MotionButton className="text-button" onClick={onGuide}>
+        <MotionButton className="app-header-pill" onClick={onGuide}>
           Guide
         </MotionButton>
         <MotionButton className="app-help-pill" onClick={onHelp}>
