@@ -92,7 +92,7 @@ export function SanctuaryProvider({ children }: { children: ReactNode }) {
     root.dataset.scene = scene.family;
   }, [ready, scene.tone, scene.family]);
 
-  useAmbientAudio(scene.audio, ready && soundOn && !paused);
+  useAmbientAudio(scene.audio, scene.id, ready && soundOn && !paused);
 
   const setPinned = useCallback((id: SceneId | null) => {
     setPinnedState(id);
