@@ -81,6 +81,10 @@ const RULES: Rule[] = [
   { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?beat (?:${YOU} (?:up|to death|senseles|black and blue)|the (?:shit|hel|crap|life) out of ${YOU})\\b`), negatable: true, jokable: true },
   { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?break (?:your|ur) (?:neck|legs?|bones|face|skul|arms?|jaw)\\b`), negatable: true, jokable: true },
   { pattern: /\b(?:you'?re|you are|ur|u r) (?:dead meat|so dead|going to die|gona die)\b/, negatable: true, jokable: true },
+  // "you will die", "you'll die", "u gonna die" (but not "if you keep smoking you will die").
+  { pattern: /\b(?:you|u)(?: wil| ?'?l| are going to| r going to| are gona| r gona| gona| shal) (?:\S+ )?die\b/, negatable: true, concernable: true, jokable: true },
+  // "...die by my hand", "kill you with my own hands".
+  { pattern: /\b(?:(?:you|u)(?:\s+\S+){0,3}?\s+(?:die|be dead)|(?:kil|murder|strangle|choke)(?:ed)? (?:you|u))\b(?:\s+\S+){0,4}?\s+(?:by|from|with|at|in) my (?:own |bare )?hands?\b/, negatable: true, jokable: true },
   { pattern: new RegExp(`\\bi'?(?:l| wil|m going to|m gona) (?:make|watch) ${YOU} (?:sufer|bled|die|pay for this)\\b`) },
 
   // Telling someone to die or hurt themselves.
@@ -179,6 +183,25 @@ export function classifyMessage(text: string): MessageVerdict {
     return hard.every((rule) => rule.jokable) && joking ? "warn" : "block";
   }
   return matchingRules(value, WARN_RULES).length ? "warn" : "ok";
+}
+
+const SEVERITY: Record<MessageVerdict, number> = { ok: 0, warn: 1, block: 2 };
+
+/**
+ * Classifies a chat message together with the same sender's recent messages
+ * (oldest first), so a sentence split across messages ("i" / "will" /
+ * "kill" / "you") is caught when its last piece arrives. A combination only
+ * counts when the new message is what makes it worse, so one earlier
+ * borderline message doesn't taint everything sent after it.
+ */
+export function classifyWithRecent(text: string, recent: string[]): MessageVerdict {
+  let verdict = classifyMessage(text);
+  for (let k = 1; k <= recent.length && verdict !== "block"; k++) {
+    const earlier = recent.slice(-k).join(" ");
+    const combined = classifyMessage(`${earlier} ${text}`);
+    if (SEVERITY[combined] > SEVERITY[classifyMessage(earlier)] && SEVERITY[combined] > SEVERITY[verdict]) verdict = combined;
+  }
+  return verdict;
 }
 
 /** True when the text must be blocked outright. */

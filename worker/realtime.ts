@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AccessAuthEnv } from "./access-auth";
-import { HARMFUL_MESSAGE_NOTICE, classifyMessage } from "./harmfulLanguage";
+import { HARMFUL_MESSAGE_NOTICE, classifyMessage, classifyWithRecent } from "./harmfulLanguage";
 import { ensureNickname } from "./nickname";
 
 export interface RealtimeEnv extends AccessAuthEnv {
@@ -36,6 +36,10 @@ const LEGACY_CONVERSATION_LIFETIME = "-20 minutes";
 const MINIMUM_MATCH_WAIT_SECONDS = 3;
 const SYNCHRONIZED_CHAT_DELAY_SECONDS = 2;
 const CHAT_DURATION_SECONDS = 20 * 60;
+// How far back a new message is read together with the sender's earlier ones
+// when checking for threats split across messages.
+const RECENT_CONTEXT_MS = 2 * 60_000;
+const RECENT_CONTEXT_MESSAGES = 5;
 // How long a user waits with no match before we tell them their preferred
 // pairing isn't available and offer a broader one instead (see relax()).
 const RELAX_PROMPT_SECONDS = 60;
@@ -738,7 +742,18 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
     // Threats, harassment and slurs are never stored or relayed; only the
     // sender is told the message wasn't sent. Borderline messages go through
     // flagged: the sender sees a gentle warning, the receiver a report option.
-    const verdict = classifyMessage(body);
+    // Checked together with this sender's last few messages, so a threat
+    // split across messages ("i" / "will" / "kill" / "you") is still caught.
+    const recent = await this.env.DB
+      .prepare(
+        `SELECT body FROM conversation_messages
+         WHERE conversation_id = ? AND sender_email = ? AND created_at >= ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?`,
+      )
+      .bind(attachment.conversationId, attachment.email, new Date(Date.now() - RECENT_CONTEXT_MS).toISOString(), RECENT_CONTEXT_MESSAGES)
+      .all<{ body: string }>();
+    const verdict = classifyWithRecent(body, recent.results.map((row) => row.body).reverse());
     if (verdict === "block") {
       socket.send(JSON.stringify({ type: "error", message: HARMFUL_MESSAGE_NOTICE }));
       return;

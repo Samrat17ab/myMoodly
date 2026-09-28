@@ -170,3 +170,28 @@ test("borderline messages are delivered with a warning", async () => {
     "I want to die",
   ], "ok");
 });
+
+test("catches 'you will die' and threats split across several messages", async () => {
+  const { classifyMessage, classifyWithRecent } = await import("../worker/harmfulLanguage.ts");
+  for (const t of ["you will die", "you'll die", "u gonna die", "you will die from my hand", "I will kill you with my bare hands"]) {
+    assert.equal(classifyMessage(t), "block", `should block: ${t}`);
+  }
+  for (const t of ["if you keep smoking you will die", "i will die from my own hands", "I made this with my own hands", "please dont say it else i will die"]) {
+    assert.equal(classifyMessage(t), "ok", `should allow: ${t}`);
+  }
+  // The exact sequence from the reported chat: each piece alone is harmless.
+  const sent = [];
+  const verdicts = ["i", "will", "kill", "you"].map((piece) => {
+    const v = classifyWithRecent(piece, sent);
+    if (v !== "block") sent.push(piece);
+    return v;
+  });
+  assert.deepEqual(verdicts, ["ok", "ok", "ok", "block"]);
+  assert.equal(classifyWithRecent("die", ["you will"]), "block", "completing \"you will die\" is blocked");
+  assert.equal(classifyWithRecent("yourself", ["go", "kill"]), "block");
+  assert.equal(classifyWithRecent("lol", ["i will", "kill", "you"]), "ok", "the blocked piece was never stored");
+  // One earlier borderline message must not flag everything after it.
+  assert.equal(classifyWithRecent("anyway how was your day", ["you're so stupid"]), "ok");
+  assert.equal(classifyWithRecent("so sorry", ["i", "hate"]), "ok");
+  assert.equal(classifyWithRecent("you", ["i", "hate"]), "warn");
+});
