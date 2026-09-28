@@ -52,7 +52,7 @@ export function HelpSheet({ country = '' }: { country?: string }) {
             </button>
             <h2 id="mm-help-title" className="mm-sheet__title">You don&apos;t have to hold this alone.</h2>
             <p className="mm-sheet__text">
-              If you are in immediate danger or thinking about ending your life, please call your local emergency number now.
+              If you feel unsafe, or things feel like too much to carry right now, please reach out straight away to someone who can help: your local emergency number or one of the lines below.
               myMoodly is peer support, not a crisis service.
             </p>
             <ul className="mm-sheet__list">

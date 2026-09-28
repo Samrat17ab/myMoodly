@@ -71,8 +71,8 @@ export default function TermsAndConditions() {
           </p>
           <p>
             myMoodly is <strong>not</strong> a healthcare provider, therapy
-            service, or crisis service. If you are in immediate danger or may
-            harm yourself or someone else, contact your local emergency
+            service, or crisis service. If you feel unsafe, are in immediate danger,
+            or someone else may be at risk, contact your local emergency
             service or an appropriate crisis resource instead of relying on
             myMoodly.
           </p>
@@ -97,7 +97,7 @@ export default function TermsAndConditions() {
           <ul>
             <li>harass, threaten, abuse, or attempt to identify or locate another user without consent;</li>
             <li>share sexual content involving minors, or otherwise use myMoodly to exploit or endanger anyone;</li>
-            <li>promote self-harm, violence, illegal activity, or discrimination;</li>
+            <li>encourage harmful or dangerous behaviour, violence, illegal activity, or discrimination;</li>
             <li>impersonate another person or misrepresent your age, gender, or identity in a way meant to deceive or harm others;</li>
             <li>solicit money, sell products or services, or attempt to move conversations to another platform for commercial purposes;</li>
             <li>attempt to disrupt, reverse-engineer, scrape, or gain unauthorized access to myMoodly or its systems; or</li>

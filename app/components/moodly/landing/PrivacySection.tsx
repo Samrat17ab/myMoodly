@@ -19,8 +19,8 @@ export function PrivacySection({ privacyHref = '/privacy' }: { privacyHref?: str
       <aside className="mm-privacy__card">
         <h3 className="mm-display mm-display--sm">What myMoodly is, and isn&apos;t</h3>
         <p className="mm-body">It&apos;s peer support: a real person and a real conversation. It isn&apos;t therapy, medical care or a crisis service.</p>
-        <p className="mm-body">If you&apos;re in danger or thinking about ending your life, please contact local emergency services or a crisis line now.</p>
-        <HelpButton variant="inline" className="mm-btn mm-btn--care" label="Find crisis support" />
+        <p className="mm-body">If you feel unsafe or things feel like too much right now, please reach out to local emergency services or a helpline straight away.</p>
+        <HelpButton variant="inline" className="mm-btn mm-btn--care" label="Find support now" />
       </aside>
     </section>
   );

@@ -22,7 +22,7 @@ export function HelpPage({ nav, country, onBack, onLogo }: Props) {
       <div className="mm-page__head">
         <h1 className="mm-display mm-display--lg">You don&apos;t have to hold this alone.</h1>
         <p className="mm-lede">
-          If you are in immediate danger or thinking about ending your life, please call your local emergency number now. myMoodly is peer support, not a crisis service.
+          If you feel unsafe, or things feel like too much to carry right now, please reach out straight away to someone who can help: your local emergency number or one of the lines below. myMoodly is peer support, not a crisis service.
         </p>
       </div>
       <ul className="mm-sheet__list">

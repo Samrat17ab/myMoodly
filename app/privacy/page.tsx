@@ -248,8 +248,8 @@ export default function PrivacyPolicy() {
             myMoodly is a peer conversation service, not a healthcare provider,
             medical service, therapy service, or crisis service. Information
             entered into myMoodly may reveal sensitive details about your mood or
-            wellbeing. If you are in immediate danger or may harm yourself or
-            someone else, contact your local emergency service or an appropriate
+            wellbeing. If you feel unsafe, are in immediate danger, or someone else may
+            be at risk, contact your local emergency service or an appropriate
             crisis resource.
           </p>
         </section>

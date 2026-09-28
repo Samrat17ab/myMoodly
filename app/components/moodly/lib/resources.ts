@@ -6,24 +6,24 @@ export interface CrisisResource {
   href: string;
 }
 
-/** The crisis resources the app has always shown, with their exact wording and numbers. */
+/** Support lines shown in the help sheet. Numbers are unchanged; names and notes use gentle wording. */
 export function resourcesFor(country: string): CrisisResource[] {
   if (country === 'Nepal') {
     return [
-      { name: 'National Suicide Prevention Helpline', detail: '1166', note: 'Free, nationwide support', href: 'tel:1166' },
-      { name: 'Police emergency', detail: '100', note: 'For immediate danger', href: 'tel:100' },
+      { name: 'National helpline', detail: '1166', note: 'Free, confidential support, nationwide', href: 'tel:1166' },
+      { name: 'Police emergency', detail: '100', note: 'If you need urgent help', href: 'tel:100' },
       { name: 'Ambulance', detail: '102', note: 'Emergency medical support', href: 'tel:102' },
     ];
   }
   return [
     { name: 'Local emergency services', detail: '112 / 911', note: 'Use the number available in your country', href: 'tel:112' },
-    { name: 'Find a crisis centre', detail: 'findahelpline.com', note: 'Verified helplines in 175+ countries', href: 'https://findahelpline.com' },
+    { name: 'Find a helpline near you', detail: 'findahelpline.com', note: 'Verified helplines in 175+ countries', href: 'https://findahelpline.com' },
   ];
 }
 
 export const HELP_TIPS = [
   'Move to a place where other people are nearby.',
-  'Put distance between you and anything you could use to hurt yourself.',
+  "Take a few slow breaths. You don't have to decide or fix anything right now.",
   'Text or call someone you trust and say: "I need you with me right now."',
 ];
 
