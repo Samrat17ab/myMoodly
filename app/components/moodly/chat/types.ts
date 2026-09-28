@@ -3,6 +3,8 @@ export interface ChatMessage {
   fromMe: boolean;
   text: string;
   sentAt?: number | string;
+  /** Borderline wording: the sender sees a gentle warning, the receiver a report option. */
+  flagged?: boolean;
 }
 
 export interface ChatPerson {

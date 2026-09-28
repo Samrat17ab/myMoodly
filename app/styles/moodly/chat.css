@@ -79,8 +79,8 @@
 .mm-chat__notice--warm { color: var(--mm-help); }
 .mm-chat__extend { margin: 4px auto 8px; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--mm-help); }
 
-.mm-bubble-row { display: flex; justify-content: flex-start; }
-.mm-bubble-row.is-me { justify-content: flex-end; }
+.mm-bubble-row { display: flex; flex-direction: column; align-items: flex-start; }
+.mm-bubble-row.is-me { align-items: flex-end; }
 .mm-bubble { max-width: min(520px, 78%); padding: 14px 20px; border-radius: 24px 24px 24px 8px; background: var(--mm-bubble-them); color: var(--mm-bubble-them-fg); font-size: 17px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mm-bubble-row.is-me .mm-bubble { border-radius: 24px 24px 8px 24px; background: var(--mm-bubble-me); color: var(--mm-bubble-me-fg); }
 .mm-bubble--typing { display: flex; align-items: center; gap: 6px; height: 48px; box-sizing: border-box; padding: 0 20px; }
@@ -150,3 +150,8 @@
   .mm-bubble { font-size: 16px; }
   .mm-chat__below { justify-content: center; }
 }
+
+/* borderline message: a quiet note under the bubble (warning for the sender, report option for the receiver) */
+.mm-bubble-note { max-width: min(520px, 78%); margin: 6px 6px 0; font-size: 13px; line-height: 1.45; color: var(--mm-text-3); }
+.mm-bubble-row.is-me .mm-bubble-note { text-align: right; }
+.mm-bubble-note__report { padding: 2px 0; border: none; border-bottom: 1px solid currentColor; background: none; color: var(--mm-help); font: inherit; font-weight: 600; cursor: pointer; }

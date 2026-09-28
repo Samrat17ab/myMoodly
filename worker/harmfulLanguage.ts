@@ -69,16 +69,18 @@ interface Rule {
   negatable?: boolean;
   /** Skip when a caring question or the speaker's own feelings come just before. */
   concernable?: boolean;
+  /** A violent threat that is only a warning when clearly joking ("I'll kill you lol"). */
+  jokable?: boolean;
 }
 
 const RULES: Rule[] = [
   // Threats of violence at the other person or their loved ones.
-  { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?${HARM_VERB}(?:s|ed|ing)? ${YOU}\\b`), negatable: true },
+  { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?${HARM_VERB}(?:s|ed|ing)? ${YOU}\\b`), negatable: true, jokable: true },
   { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?(?:${HARM_VERB}|shot|beat)(?:s|ed|ing)? (?:your|ur) ${LOVED_ONES}\\b`), negatable: true },
-  { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?shot ${YOU}(?: dead| down| in the| with|$)`), negatable: true },
-  { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?beat (?:${YOU} (?:up|to death|senseles|black and blue)|the (?:shit|hel|crap|life) out of ${YOU})\\b`), negatable: true },
-  { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?break (?:your|ur) (?:neck|legs?|bones|face|skul|arms?|jaw)\\b`), negatable: true },
-  { pattern: /\b(?:you'?re|you are|ur|u r) (?:dead meat|so dead|going to die|gona die)\b/, negatable: true },
+  { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?shot ${YOU}(?: dead| down| in the| with|$)`), negatable: true, jokable: true },
+  { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?beat (?:${YOU} (?:up|to death|senseles|black and blue)|the (?:shit|hel|crap|life) out of ${YOU})\\b`), negatable: true, jokable: true },
+  { pattern: new RegExp(`\\b${I_WILL} (?:\\S+ ){0,2}?break (?:your|ur) (?:neck|legs?|bones|face|skul|arms?|jaw)\\b`), negatable: true, jokable: true },
+  { pattern: /\b(?:you'?re|you are|ur|u r) (?:dead meat|so dead|going to die|gona die)\b/, negatable: true, jokable: true },
   { pattern: new RegExp(`\\bi'?(?:l| wil|m going to|m gona) (?:make|watch) ${YOU} (?:sufer|bled|die|pay for this)\\b`) },
 
   // Telling someone to die or hurt themselves.
@@ -124,19 +126,62 @@ const RULES: Rule[] = [
 const SLURS = /\b(?:nig{2,}(?:er|ers|r|rs)|fag{2,}ots?|kikes?|spics?|tran{2,}(?:y|ies)|wetbacks?|ragheads?|towelheads?)\b/;
 const RETARD = /\b(?:you|u|ur|you'?re|you are|stupid|fucking|fuking|such a) (?:a )?retard(?:s|ed)?\b/;
 
-/** True when the text contains a threat, harassment, a slur or bullying aimed at someone. */
-export function isHarmful(text: string) {
-  const cleaned = clean(text);
-  if (!cleaned) return false;
-  if (SLURS.test(cleaned) || RETARD.test(cleaned)) return true;
-  const value = squeeze(cleaned);
-  for (const { pattern, negatable, concernable } of RULES) {
-    const match = pattern.exec(value);
-    if (!match) continue;
+// Borderline ("50/50") messages: delivered, but the sender sees a gentle
+// warning and the receiver is offered a way to report. Squeezed spelling.
+const INSULT =
+  "(?:stupid|idiot|dumb|dumbas|moron|loser|pathetic|ugly|fat|disgusting|crep|crepy|weirdo|freak|trash|garbage|bitch|slut|whore|hoe|cunt|dick|ashole|bastard|prick|jerk|clown|psycho|useles|failure|anoying)";
+const WARN_RULES: Rule[] = [
+  // Insults aimed at the other person: "you're so stupid", "you idiot", "you bitch".
+  { pattern: new RegExp(`\\b(?:you'?re|you are|youre|ur|u r|u are|you|u) (?:so |such a |such an |a |an |just |fucking |fuking |complete |total |big )*${INSULT}s?\\b`), negatable: true },
+  // Hostile brush-offs.
+  { pattern: /\b(?:fuck|fuk|screw) (?:you|u|of)\b|\bgo fuck yourself\b|\bstfu\b|\bshut the fuck up\b|^shut up$|\bpis of\b|\bkis my as\b|\b(?:nobody|no one) asked\b/ },
+  { pattern: /\bi (?:fucking |realy |just )?hate (?:you|u)\b/, negatable: true },
+  // Creepy or sexual pressure.
+  { pattern: /\b(?:are you|are u|r u|r you) (?:single|a virgin|horny|naked|wet|alone right now)\b/ },
+  { pattern: /\bwhat (?:are you|r u|are u) wearing\b/ },
+  { pattern: /\bsend (?:me )?(?:a |your |ur )?(?:pic|pics|photo|photos|selfie|picture)\b/ },
+  { pattern: /\b(?:you'?re|you are|ur|u r) (?:so |realy )?(?:hot|sexy)\b/ },
+  { pattern: /\b(?:wana|want to|let'?s|lets) (?:fuck|have sex|hok up|sext)\b/ },
+];
+
+// Laughing it off turns a violent threat into a borderline message.
+const JOKING = /\b(?:lol|lmao|lmfao|rofl|haha\w*|hehe\w*|jk|just kiding|kiding|joking|jokes)\b/;
+const JOKING_EMOJI = /[\u{1F602}\u{1F923}\u{1F606}\u{1F61C}\u{1F61D}]/u;
+
+export type MessageVerdict = "block" | "warn" | "ok";
+
+function matchingRules(value: string, rules: Rule[]) {
+  return rules.filter((rule) => {
+    const match = rule.pattern.exec(value);
+    if (!match) return false;
     const before = value.slice(0, match.index);
-    if (negatable && (NEGATION_BEFORE.test(before) || NEGATION_INSIDE.test(match[0]))) continue;
-    if (concernable && (CONCERN_BEFORE.test(before) || isSelfTalk(before))) continue;
+    if (rule.negatable && (NEGATION_BEFORE.test(before) || NEGATION_INSIDE.test(match[0]))) return false;
+    if (rule.concernable && (CONCERN_BEFORE.test(before) || isSelfTalk(before))) return false;
     return true;
+  });
+}
+
+/**
+ * "block": never stored or delivered (threats, telling someone to die,
+ * stalking, sexual harassment, slurs, bullying).
+ * "warn": delivered, with a gentle warning to the sender and a report
+ * option for the receiver (insults, hostility, creepy messages, joking threats).
+ */
+export function classifyMessage(text: string): MessageVerdict {
+  const cleaned = clean(text);
+  if (!cleaned) return "ok";
+  if (SLURS.test(cleaned) || RETARD.test(cleaned)) return "block";
+  const value = squeeze(cleaned);
+  const hard = matchingRules(value, RULES);
+  if (hard.length) {
+    // Anything that isn't a laughed-off threat ("kys", slurs...) is always blocked.
+    const joking = JOKING.test(value) || JOKING_EMOJI.test(text);
+    return hard.every((rule) => rule.jokable) && joking ? "warn" : "block";
   }
-  return false;
+  return matchingRules(value, WARN_RULES).length ? "warn" : "ok";
+}
+
+/** True when the text must be blocked outright. */
+export function isHarmful(text: string) {
+  return classifyMessage(text) === "block";
 }

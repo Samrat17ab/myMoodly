@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AccessAuthEnv } from "./access-auth";
-import { HARMFUL_MESSAGE_NOTICE, isHarmful } from "./harmfulLanguage";
+import { HARMFUL_MESSAGE_NOTICE, classifyMessage } from "./harmfulLanguage";
 import { ensureNickname } from "./nickname";
 
 export interface RealtimeEnv extends AccessAuthEnv {
@@ -694,6 +694,8 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
         text: message.body,
         mine: message.sender_email === email,
         time: message.created_at,
+        // Recomputed on reconnect, so the warning survives a page reload.
+        flagged: classifyMessage(message.body) === "warn",
       })),
     }));
     this.broadcastPresence();
@@ -734,11 +736,14 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
     const body = typeof payload.text === "string" ? payload.text.trim().slice(0, 1000) : "";
     if (!body) return;
     // Threats, harassment and slurs are never stored or relayed; only the
-    // sender is told the message wasn't sent.
-    if (isHarmful(body)) {
+    // sender is told the message wasn't sent. Borderline messages go through
+    // flagged: the sender sees a gentle warning, the receiver a report option.
+    const verdict = classifyMessage(body);
+    if (verdict === "block") {
       socket.send(JSON.stringify({ type: "error", message: HARMFUL_MESSAGE_NOTICE }));
       return;
     }
+    const flagged = verdict === "warn";
 
     const active = await this.env.DB
       .prepare("SELECT id FROM conversations WHERE id = ? AND status = 'active' LIMIT 1")
@@ -770,6 +775,7 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
             text: body,
             mine: peerAttachment.email === attachment.email,
             time: createdAt,
+            flagged,
           },
         }));
       }

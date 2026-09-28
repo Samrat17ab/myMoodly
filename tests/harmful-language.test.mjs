@@ -125,3 +125,48 @@ test("allows care, support and everyday phrases", () => {
     "hang in there",
   ], false);
 });
+
+test("borderline messages are delivered with a warning", async () => {
+  const { classifyMessage } = await import("../worker/harmfulLanguage.ts");
+  const expect = (list, verdict) => {
+    for (const text of list) assert.equal(classifyMessage(text), verdict, `expected ${verdict}: ${text}`);
+  };
+  expect([
+    "you're so stupid",
+    "you idiot",
+    "shut up you bitch",
+    "you are ugly",
+    "such a loser, you are pathetic",
+    "fuck you",
+    "fuck you lol, you made me laugh",
+    "go fuck yourself",
+    "stfu",
+    "I hate you",
+    "are you single?",
+    "what are you wearing",
+    "send me a pic",
+    "you're so hot",
+    "wanna hook up?",
+    "I'll kill you lol",
+    "haha I'm going to stab you",
+    "I will kill you 😂",
+    "if you spoil the movie I'll kill you jk",
+  ], "warn");
+  expect([
+    "I'll kill you lol, kys",
+    "kys lol",
+    "I will kill you",
+    "go die haha",
+    "send nudes lol",
+  ], "block");
+  expect([
+    "you're not stupid at all",
+    "I don't hate you",
+    "people called me stupid at school",
+    "I feel so ugly today",
+    "fuck this week",
+    "you're so kind",
+    "thank you for listening",
+    "I want to die",
+  ], "ok");
+});

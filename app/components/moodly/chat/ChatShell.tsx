@@ -137,6 +137,18 @@ export function ChatShell({ me, partner, messages, partnerTyping, partnerPresent
           {messages.map((m) => (
             <motion.div key={m.id} className={`mm-bubble-row${m.fromMe ? ' is-me' : ''}`} {...bubbleIn}>
               <div className="mm-bubble">{m.text}</div>
+              {m.flagged &&
+                (m.fromMe ? (
+                  <p className="mm-bubble-note">This may come across as hurtful. Please keep it kind.</p>
+                ) : (
+                  <p className="mm-bubble-note">
+                    This message may be hurtful. If something feels wrong,{' '}
+                    <button type="button" className="mm-bubble-note__report" onClick={onReport}>
+                      report it
+                    </button>
+                    .
+                  </p>
+                ))}
             </motion.div>
           ))}
 

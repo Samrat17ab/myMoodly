@@ -42,6 +42,7 @@ type ChatMessage = {
   mine: boolean;
   text: string;
   time: string;
+  flagged?: boolean;
 };
 type RealtimePacket = {
   type?: "ready" | "message" | "presence" | "ended" | "error" | "extended" | "extend-requested";
@@ -791,7 +792,7 @@ function MoodlyScreens() {
         <ChatShell
           me={{ name: nickname || "You", initials, color: myColor, word: checkIn?.word, note: checkIn?.note }}
           partner={{ name: partnerName, initials: partnerInitials, color: partnerColor, word: partnerEmotion, note: partnerNote }}
-          messages={messages.map((m) => ({ id: m.id, fromMe: m.mine, text: m.text, sentAt: m.time }))}
+          messages={messages.map((m) => ({ id: m.id, fromMe: m.mine, text: m.text, sentAt: m.time, flagged: m.flagged }))}
           partnerPresent={socketStatus === "live" && onlineCount >= 2}
           presenceLabel={socketStatus !== "live" ? "Reconnecting securely…" : onlineCount < 2 ? "Stepped away for a moment" : undefined}
           secondsLeft={chatSeconds}
