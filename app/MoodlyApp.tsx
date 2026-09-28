@@ -211,7 +211,8 @@ function MoodlyScreens() {
 
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => setToast(""), 2600);
+    // Longer notices (e.g. a message that wasn't sent) stay up long enough to read.
+    const id = setTimeout(() => setToast(""), Math.min(9000, Math.max(2600, toast.length * 55)));
     return () => clearTimeout(id);
   }, [toast]);
   const completeSignIn = useCallback(async () => {

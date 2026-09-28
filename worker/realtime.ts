@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AccessAuthEnv } from "./access-auth";
+import { HARMFUL_MESSAGE_NOTICE, isHarmful } from "./harmfulLanguage";
 import { ensureNickname } from "./nickname";
 
 export interface RealtimeEnv extends AccessAuthEnv {
@@ -732,6 +733,12 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
     if (payload.type !== "message") return;
     const body = typeof payload.text === "string" ? payload.text.trim().slice(0, 1000) : "";
     if (!body) return;
+    // Threats, harassment and slurs are never stored or relayed; only the
+    // sender is told the message wasn't sent.
+    if (isHarmful(body)) {
+      socket.send(JSON.stringify({ type: "error", message: HARMFUL_MESSAGE_NOTICE }));
+      return;
+    }
 
     const active = await this.env.DB
       .prepare("SELECT id FROM conversations WHERE id = ? AND status = 'active' LIMIT 1")

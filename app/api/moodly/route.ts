@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { ensureDbSchema, getD1 } from "@/db";
 import { CONTACT_DETAILS_MESSAGE, findContactDetail } from "@/app/lib/contactDetails";
 import { recordAlert } from "@/worker/alerts";
+import { HARMFUL_NOTE_NOTICE, isHarmful } from "@/worker/harmfulLanguage";
 import {
   authenticatedRequestEmail,
   type AccessAuthEnv,
@@ -205,6 +206,9 @@ export async function POST(request: Request) {
       // reach someone outside myMoodly.
       if (findContactDetail(note)) {
         return jsonError(CONTACT_DETAILS_MESSAGE);
+      }
+      if (isHarmful(note)) {
+        return jsonError(HARMFUL_NOTE_NOTICE);
       }
 
       await d1
