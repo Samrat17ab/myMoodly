@@ -1,5 +1,6 @@
 'use client';
 
+import { CONTACT_DETAILS_MESSAGE, findContactDetail } from '@/app/lib/contactDetails';
 import { IconDifferent, IconSimilar } from '../Icons';
 import { describeMood, type MoodPoint } from '../lib/mood';
 import { MoodChip } from './MoodChip';
@@ -22,6 +23,8 @@ interface Props {
 
 export function DetailsStep({ point, word, note, onNote, intent, onIntent, remaining, submitting, onSubmit }: Props) {
   const d = describeMood(point);
+  // The note is shown to the matched person; contact details can't go in it.
+  const blocked = findContactDetail(note) !== null;
   return (
     <div className="mm-details">
       <MoodChip point={point} text={word ? `Feeling ${word.toLowerCase()}` : d.label} />
@@ -33,7 +36,9 @@ export function DetailsStep({ point, word, note, onNote, intent, onIntent, remai
       <div className="mm-details__field">
         <textarea
           id="mm-note"
-          className="mm-textarea"
+          className={`mm-textarea${blocked ? ' is-invalid' : ''}`}
+          aria-invalid={blocked}
+          aria-describedby={blocked ? 'mm-note-error' : undefined}
           value={note}
           maxLength={MAX}
           onChange={(e) => onNote(e.target.value.slice(0, MAX))}
@@ -44,13 +49,18 @@ export function DetailsStep({ point, word, note, onNote, intent, onIntent, remai
           {note.length}/{MAX}
         </span>
       </div>
+      {blocked && (
+        <p id="mm-note-error" className="mm-error mm-details__error" role="alert">
+          {CONTACT_DETAILS_MESSAGE}
+        </p>
+      )}
       <div className="mm-details__starters">
         {STARTERS.map((s) => (
           <button key={s} type="button" className="mm-chip" onClick={() => onNote(s)}>
             {s}
           </button>
         ))}
-        <span className="mm-fine mm-details__privacy">Phone numbers, emails and links are removed.</span>
+        <span className="mm-fine mm-details__privacy">No phone numbers, emails, handles or links here.</span>
       </div>
 
       <h2 className="mm-display mm-display--sm mm-details__who">Who would feel right to talk to?</h2>
@@ -72,7 +82,7 @@ export function DetailsStep({ point, word, note, onNote, intent, onIntent, remai
       </div>
 
       <div className="mm-details__submit">
-        <button type="button" className="mm-btn mm-btn--primary" onClick={onSubmit} disabled={submitting || remaining <= 0}>
+        <button type="button" className="mm-btn mm-btn--primary" onClick={onSubmit} disabled={submitting || remaining <= 0 || blocked}>
           {submitting ? 'Finding someone…' : 'Find someone'}
         </button>
         <span className="mm-fine">

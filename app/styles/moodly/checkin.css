@@ -106,3 +106,8 @@
   .mm-details__choices { grid-template-columns: 1fr; }
   .mm-details__privacy { margin-left: 0; width: 100%; }
 }
+
+/* note contains contact details: the check-in can't be sent until it's removed */
+.mm-textarea.is-invalid { border-color: #a7706a; box-shadow: 0 0 0 4px color-mix(in srgb, #a7706a 18%, transparent); }
+.mm-details__error { margin: -4px 0 0; font-size: 14px; line-height: 1.5; }
+[data-tone='dark'] .mm-details__error { color: #f1b3a9; }

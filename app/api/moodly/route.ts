@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { ensureDbSchema, getD1 } from "@/db";
+import { CONTACT_DETAILS_MESSAGE, findContactDetail } from "@/app/lib/contactDetails";
 import { recordAlert } from "@/worker/alerts";
 import {
   authenticatedRequestEmail,
@@ -199,6 +200,11 @@ export async function POST(request: Request) {
         !["similar", "different"].includes(String(matchMode))
       ) {
         return jsonError("A complete mood check-in is required");
+      }
+      // The note is shown to the matched partner, so it can't carry a way to
+      // reach someone outside myMoodly.
+      if (findContactDetail(note)) {
+        return jsonError(CONTACT_DETAILS_MESSAGE);
       }
 
       await d1
