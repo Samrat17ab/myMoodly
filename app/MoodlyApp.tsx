@@ -16,14 +16,14 @@ import type { CheckInPayload } from "@/app/components/moodly/checkin/types";
 import { WaitingRoom } from "@/app/components/moodly/waiting/WaitingRoom";
 import { ChatShell } from "@/app/components/moodly/chat/ChatShell";
 import { ReportSheet } from "@/app/components/moodly/chat/ReportSheet";
-import { ClosingReflection } from "@/app/components/moodly/reflection/ClosingReflection";
+import { ClosingReflection, type NextStep } from "@/app/components/moodly/reflection/ClosingReflection";
 import { Onboarding } from "@/app/components/moodly/pages/Onboarding";
 import { Guide } from "@/app/components/moodly/pages/Guide";
 import { Settings } from "@/app/components/moodly/pages/Settings";
 import { HelpPage } from "@/app/components/moodly/pages/HelpPage";
 import { LimitReached } from "@/app/components/moodly/pages/LimitReached";
 import type { HeaderNav } from "@/app/components/moodly/pages/PageShell";
-import { MOOD_HEX, TO_BACKEND_QUADRANT, describeMood, moodColor } from "@/app/components/moodly/lib/mood";
+import { MOOD_HEX, TO_BACKEND_QUADRANT, describeMood, moodColor, quadrantOf, toBackendMood, type MoodPoint } from "@/app/components/moodly/lib/mood";
 import { quadrantOfWord } from "@/app/components/moodly/lib/words";
 import { EMAIL_SIGNIN_ENABLED } from "@/app/lib/config";
 import { emptyProfile, initialsFor, type Profile } from "@/app/lib/profile";
@@ -112,6 +112,9 @@ function MoodlyScreens() {
   // The last check-in sent; restored into the flow if a search is cancelled.
   const [checkIn, setCheckIn] = useState<CheckInPayload | null>(null);
   const [startingQueue, setStartingQueue] = useState(false);
+  // Where the check-in opens when restoring a previous one.
+  const [checkinStart, setCheckinStart] = useState<"details" | "map">("details");
+  const [surveySaving, setSurveySaving] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [queueSeconds, setQueueSeconds] = useState(0);
   const [usage, setUsage] = useState(0);
@@ -519,9 +522,11 @@ function MoodlyScreens() {
       setAccountBusy(false);
     }
   };
+  // Resolves true once the search has started.
   const startQueue = async (payload: CheckInPayload) => {
-    if (startingQueue) return;
+    if (startingQueue) return false;
     setCheckIn(payload);
+    setCheckinStart("details");
     setStartingQueue(true);
     const quadrant = TO_BACKEND_QUADRANT[payload.quadrant];
     const mode = payload.intent;
@@ -551,8 +556,10 @@ function MoodlyScreens() {
       if (match.status === "matched" && match.conversationId) {
         scheduleMatchedChat(match);
       }
+      return true;
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not start matchmaking.");
+      return false;
     } finally {
       setStartingQueue(false);
     }
@@ -601,20 +608,47 @@ function MoodlyScreens() {
     socketRef.current.send(JSON.stringify({ type:"extend-request" }));
     setExtendRequestedByMe(true);
   };
-  const submitSurvey = async () => {
+  // Saves the feedback for the conversation that just ended, then goes
+  // straight on: home, a new search with the same check-in, or back to the
+  // mood map starting from where the light ended up.
+  const submitSurvey = async (next: NextStep, after: MoodPoint) => {
     if (!survey.understood || !survey.change || !survey.partnerRating) {
       return setToast("Please answer all three questions.");
     }
+    if (surveySaving) return;
+    setSurveySaving(true);
     try {
       await saveMoodlyData({
         type:"survey", email, checkInId,
         understood:survey.understood, moodChange:survey.change, partnerRating:survey.partnerRating,
       });
-      setToast("Thanks — your response was saved.");
       setSurvey({ understood:"", change:"", partnerRating:"" });
-      navigate("home");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not save your response.");
+      setSurveySaving(false);
+      return;
+    }
+    setSurveySaving(false);
+    if (next === "home" || !checkIn) {
+      setToast("Thanks — your response was saved.");
+      navigate("home");
+    } else if (usage >= DAILY_LIMIT) {
+      navigate("paywall");
+    } else if (next === "again") {
+      // If the search can't start, land on the prefilled check-in to retry.
+      if (!(await startQueue(checkIn))) navigate("checkin");
+    } else {
+      const quadrant = quadrantOf(after);
+      setCheckIn({
+        ...checkIn,
+        point: after,
+        quadrant,
+        ...toBackendMood(after),
+        // The word only carries over if it still fits where the light is.
+        word: quadrant === checkIn.quadrant ? checkIn.word : "",
+      });
+      setCheckinStart("map");
+      navigate("checkin");
     }
   };
   const endChat = () => {
@@ -749,6 +783,7 @@ function MoodlyScreens() {
         remaining={remaining}
         submitting={startingQueue}
         initial={checkIn ? { point: checkIn.point, word: checkIn.word, note: checkIn.note, intent: checkIn.intent } : null}
+        startAt={checkinStart}
         onSubmit={(payload) => void startQueue(payload)}
         onExit={() => navigate("home")}
       />
@@ -821,7 +856,11 @@ function MoodlyScreens() {
       <ClosingReflection
         partnerName={partnerName}
         before={point}
-        onDone={() => void submitSurvey()}
+        ready={Boolean(survey.understood && survey.change && survey.partnerRating)}
+        remaining={remaining}
+        word={checkIn?.word}
+        saving={surveySaving || startingQueue}
+        onNext={(next, after) => void submitSurvey(next, after)}
         onSkip={() => navigate("home")}
       >
         <div className="mm-reflect__questions">

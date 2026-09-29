@@ -21,6 +21,8 @@ interface Props {
   submitting?: boolean;
   /** restore a previous check-in (e.g. after a search was cancelled) */
   initial?: { point: MoodPoint; word: string; note: string; intent: Intent } | null;
+  /** with `initial`: open at the last step (default) or back at the mood map */
+  startAt?: 'details' | 'map';
 }
 
 const TOTAL = 3;
@@ -32,8 +34,8 @@ const TOTAL = 3;
  *   2. the word
  *   3. optional note + who to talk to
  */
-export function CheckInFlow({ remaining, onSubmit, onExit, submitting, initial }: Props) {
-  const [step, setStep] = useState(initial ? 2 : 0);
+export function CheckInFlow({ remaining, onSubmit, onExit, submitting, initial, startAt = 'details' }: Props) {
+  const [step, setStep] = useState(initial && startAt === 'details' ? 2 : 0);
   const [dir, setDir] = useState(1);
   const [point, setPoint] = useState<MoodPoint>(initial?.point ?? { x: 0.5, y: 0.5 });
   const [touched, setTouched] = useState(!!initial);

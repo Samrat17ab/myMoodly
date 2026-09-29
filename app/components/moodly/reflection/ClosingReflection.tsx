@@ -1,13 +1,13 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type ReactNode } from 'react';
 import { IconLeaf } from '../Icons';
 import { MoodMap } from '../MoodMap';
 import { SceneControls } from '../SceneControls';
 import { Sanctuary } from '../sanctuary/Sanctuary';
 import { EASE_OUT } from '../lib/motion';
-import type { MoodPoint } from '../lib/mood';
+import { quadrantOf, type MoodPoint } from '../lib/mood';
 
 interface Props {
   partnerName: string;
@@ -15,11 +15,23 @@ interface Props {
   before: MoodPoint;
   /** extra questions shown in the card (the app's feedback survey) */
   children?: ReactNode;
-  /** "Back home": receives where the light ended up and whether it was moved */
-  onDone: (after: MoodPoint, moved: boolean) => void;
+  /** all feedback questions answered: the next-step choices appear */
+  ready: boolean;
+  /** conversations left today */
+  remaining: number;
+  /** the word from this conversation's check-in */
+  word?: string | null;
+  /**
+   * Saves the feedback, then: "again" finds someone new with the same
+   * check-in, "change" reopens the check-in at the mood map (starting from
+   * where the light ended up), "home" goes back home.
+   */
+  onNext: (choice: NextStep, after: MoodPoint) => void;
   onSkip?: () => void;
   saving?: boolean;
 }
+
+export type NextStep = 'again' | 'change' | 'home';
 
 export function shiftText(before: MoodPoint, after: MoodPoint, moved: boolean) {
   if (!moved) return 'Place your light again. There is no right answer.';
@@ -31,9 +43,12 @@ export function shiftText(before: MoodPoint, after: MoodPoint, moved: boolean) {
   return 'Still stirred up. Checking in again later can help.';
 }
 
-export function ClosingReflection({ partnerName, before, children, onDone, onSkip, saving }: Props) {
+export function ClosingReflection({ partnerName, before, children, ready, remaining, word, onNext, onSkip, saving }: Props) {
   const [after, setAfter] = useState<MoodPoint>(before);
   const [moved, setMoved] = useState(false);
+  // Light moved to a different feeling area: suggest checking in afresh first.
+  const moodChanged = moved && quadrantOf(after) !== quadrantOf(before);
+  const canTalk = remaining > 0;
 
   return (
     <div className="mm-reflect">
@@ -60,16 +75,65 @@ export function ClosingReflection({ partnerName, before, children, onDone, onSki
           <span>{shiftText(before, after, moved)}</span>
         </p>
         {children}
-        <div className="mm-reflect__actions">
-          <button type="button" className="mm-btn mm-btn--primary" onClick={() => onDone(after, moved)} disabled={saving}>
-            {saving ? 'Saving…' : 'Back home'}
-          </button>
-          {onSkip && (
-            <button type="button" className="mm-link mm-link--muted" onClick={onSkip}>
-              Skip
-            </button>
+        <AnimatePresence mode="wait" initial={false}>
+          {ready ? (
+            <motion.div
+              key="next"
+              className="mm-reflect__next"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: EASE_OUT }}
+            >
+              {canTalk ? (
+                <>
+                  <p className="mm-reflect__next-title">Want to talk to someone new?</p>
+                  <div className="mm-reflect__actions">
+                    <button
+                      type="button"
+                      className={`mm-btn ${moodChanged ? 'mm-btn--glass' : 'mm-btn--primary'}`}
+                      onClick={() => onNext('again', after)}
+                      disabled={saving}
+                    >
+                      {word ? `Still ${word.toLowerCase()}, find someone` : 'Find someone new'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`mm-btn ${moodChanged ? 'mm-btn--primary' : 'mm-btn--glass'}`}
+                      onClick={() => onNext('change', after)}
+                      disabled={saving}
+                    >
+                      My mood has changed
+                    </button>
+                  </div>
+                  <p className="mm-fine">
+                    {remaining} {remaining === 1 ? 'conversation' : 'conversations'} left today.{' '}
+                    <button type="button" className="mm-link mm-link--muted" onClick={() => onNext('home', after)} disabled={saving}>
+                      Back home
+                    </button>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mm-reflect__next-title">That was your last conversation for today.</p>
+                  <div className="mm-reflect__actions">
+                    <button type="button" className="mm-btn mm-btn--primary" onClick={() => onNext('home', after)} disabled={saving}>
+                      {saving ? 'Saving…' : 'Back home'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div key="waiting" className="mm-reflect__actions" exit={{ opacity: 0 }}>
+              <p className="mm-fine">Answer the three questions to continue.</p>
+              {onSkip && (
+                <button type="button" className="mm-link mm-link--muted" onClick={onSkip}>
+                  Skip
+                </button>
+              )}
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </motion.main>
       <div className="mm-reflect__footer">
         <SceneControls />
