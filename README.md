@@ -1,98 +1,193 @@
-# vinext-starter
+<p align="center">
+  <img src="public/og.jpg" alt="myMoodly: anonymous conversations for how you really feel" width="720">
+</p>
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+<h1 align="center">myMoodly</h1>
 
-## Prerequisites
+<p align="center">
+  <strong>Name how you feel. Talk it through with one real person.</strong><br>
+  An anonymous, mood-matched peer conversation platform for adults.
+</p>
 
-- Node.js `>=22.13.0`
+<p align="center">
+  <a href="https://mymoodly.space">mymoodly.space</a> ·
+  <a href="docs/API.md">API reference</a> ·
+  <a href="https://mymoodly.space/privacy">Privacy</a> ·
+  <a href="https://mymoodly.space/terms">Terms</a>
+</p>
 
-## Quick Start
+---
+
+## Overview
+
+myMoodly connects two strangers by how they feel, not who they are. A person
+places a light on a mood map, picks the word that fits, and is matched with
+someone in a similar headspace or a different one. They talk anonymously for
+20 minutes, then reflect on how they feel afterwards.
+
+There are no profiles to browse, no followers and no history anyone else can
+see. Each person appears under a rotating two-word name such as "Quiet Heron".
+
+myMoodly is peer support, not therapy or a crisis service. Support lines are
+one tap away on every screen.
+
+## Features
+
+**Check-in**
+- A two-dimensional mood map (energy × pleasantness) with keyboard support
+  and a four-area fallback
+- A short list of feeling words for the chosen area, from gentle to strong
+- An optional note for the other person, and a choice between someone who
+  feels similar or someone in a different headspace
+
+**Matching and conversation**
+- Real-time matching by mood and shared language, with an option to widen
+  the search after a minute
+- Live one-to-one chat over WebSocket with a 20-minute timer, extendable when
+  both people agree
+- A closing reflection with a before/after mood map and a short survey, then
+  a one-tap path to the next conversation
+
+**Safety**
+- Report and block in every conversation; three distinct reports lead to a
+  permanent ban
+- Server-side message moderation in three levels: clearly harmful messages
+  (threats, harassment, slurs) are blocked, borderline ones are delivered with
+  a gentle warning and a report option, and everything else passes through.
+  People describing their own pain are never blocked.
+- Check-in notes can't contain contact details or harmful language
+- 18+ only, with a daily limit of 10 conversations
+
+**Experience**
+- "Sanctuary" backgrounds: illustrated dawn, day, golden-hour and night scenes
+  that follow the local time of day, with light and dark themes
+- Optional generated ambient sound per scene
+- Built for phones first, with reduced-motion support
+
+## How it works
+
+```
+Browser (Next.js client)
+   │  HTTPS /api/*                         WebSocket /api/realtime
+   ▼                                              ▼
+Cloudflare Worker ── session check ──┬── App API routes ──────────┐
+                                     ├── Matchmaker (Durable Object, one global queue)
+                                     └── ChatRoom   (Durable Object, one per conversation)
+                                                                  ▼
+                                                     Cloudflare D1 (SQLite)
+External: Google OAuth (sign-in) · Gmail SMTP (admin alerts)
+```
+
+- The **Worker** resolves the signed-in user from a hashed session cookie and
+  routes each request.
+- The **Matchmaker** Durable Object owns the waiting queue, so two people can
+  never be matched into two conversations at once.
+- Each **ChatRoom** Durable Object runs one conversation: it checks
+  membership, moderates and stores messages, and ends the chat on a
+  server-side alarm.
+- **D1** holds profiles, check-ins, conversations, messages, reports and
+  analytics.
+
+See [docs/API.md](docs/API.md) for every route, request and response.
+
+## Tech stack
+
+| Area | Technology |
+|---|---|
+| Frontend | Next.js 16 (App Router), React 19, Framer Motion, plain CSS |
+| Runtime | Cloudflare Workers via [vinext](https://github.com/cloudflare/vinext) |
+| Realtime | Cloudflare Durable Objects, WebSockets |
+| Database | Cloudflare D1 with Drizzle ORM |
+| Auth | Google OAuth 2.0 (PKCE, nonce, state), hashed session tokens |
+| Email | Gmail SMTP for admin alerts |
+| CI/CD | GitHub Actions: lint, build, test, deploy on every push to `main` |
+
+## Project structure
+
+```
+app/
+  MoodlyApp.tsx          Client orchestrator: screens, navigation, realtime
+  components/moodly/     UI: landing, check-in, waiting room, chat, reflection
+  styles/moodly/         Design tokens and component styles
+  api/                   API routes: profile and check-ins, auth, admin
+  lib/                   Shared helpers (routes, profile, contact-detail check)
+worker/
+  index.ts               Worker entry: routing and session check
+  realtime.ts            Matchmaker and ChatRoom Durable Objects
+  harmfulLanguage.ts     Message moderation
+db/                      Drizzle schema and D1 access
+drizzle/                 Database migrations
+tests/                   Unit, integration and load tests
+docs/API.md              API reference
+```
+
+## Getting started
+
+**Requirements:** Node.js 22.13 or later.
 
 ```bash
 npm install
-npm run dev
-npm run build
+cp .dev.vars.example .dev.vars   # then fill in the values
+npm run dev                      # http://localhost:3000
 ```
 
-This starter does not use `wrangler.jsonc`.
+`.dev.vars` holds local secrets and is ignored by Git:
 
-## Included Shape
+| Variable | Used for |
+|---|---|
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in |
+| `SMTP_USERNAME`, `GMAIL_APP_PASSWORD` | Sending admin alert emails |
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+The local server uses its own local D1 database, so development never touches
+production data. On `localhost` only, API requests may pass an `email` field
+in place of a session, which lets the integration tests simulate users.
 
-## Workspace Auth Headers
+## Testing
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+npm test          # build, then unit tests (moderation, contact details, rendering)
+npm run lint
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+With the local server running, the integration and load tests exercise real
+matching and chat:
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+```bash
+MOODLY_BASE_URL=http://localhost:3000 node tests/realtime-integration.mjs
+MOODLY_BASE_URL=http://localhost:3000 node tests/language-matching.mjs
+MOODLY_BASE_URL=http://localhost:3000 node tests/matchmaking-50-users.mjs
+```
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+## Deployment
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+Every push to `main` runs the [Deploy workflow](.github/workflows/deploy.yml):
+lint, build and tests, then `wrangler deploy` to Cloudflare Workers. A failing
+step stops the deploy, so the live site only changes when everything passes.
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+Production secrets are stored in Cloudflare, not in this repository.
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+### Optional scene recordings
 
-## Useful Commands
+Ambient sound is generated in the browser by default. To use real recordings
+instead, add looping audio files at `public/sounds/dawn-lake.mp3`,
+`day-meadow.mp3`, `golden-shore.mp3` and `night-aurora.mp3`; they're picked up
+automatically. Use only audio you have the rights to.
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+## Privacy and safety
 
-## Learn More
+- Conversation partners see only each other's rotating name. Report and block
+  resolve the other person on the server; real identities never reach the
+  client.
+- Session tokens and sign-in codes are stored only as hashes.
+- Messages and check-ins are stored to deliver conversations and to run
+  safety, reporting and abuse controls, as described in the
+  [Privacy Policy](https://mymoodly.space/privacy).
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+If you find a security issue, please report it privately to the project
+owner instead of opening a public issue.
+
+## Status
+
+myMoodly is in active development and early launch.
+
+© myMoodly. All rights reserved.
