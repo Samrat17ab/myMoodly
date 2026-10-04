@@ -25,7 +25,7 @@ export const lonelinessFacts: Post = {
     { type: "h2", text: "It's far more common than it feels" },
     {
       type: "p",
-      text: "In 2023 the U.S. Surgeon General issued an advisory calling loneliness and isolation an epidemic, noting that about half of adults in the United States report experiencing measurable levels of loneliness. The same year, the World Health Organization launched a Commission on Social Connection to treat loneliness as a global public health priority.",
+      text: "In 2023 the U.S. Surgeon General issued an advisory calling loneliness and isolation an epidemic, noting that in recent years about one in two adults in America reported experiencing loneliness. The same year, the World Health Organization launched a Commission on Social Connection to treat loneliness as a global public health priority.",
     },
     {
       type: "p",
