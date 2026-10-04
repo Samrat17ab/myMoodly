@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { HelpButton } from '../HelpButton';
 import { Logo } from '../Logo';
 import { SceneControls } from '../SceneControls';
@@ -28,6 +29,9 @@ export function LandingHero({ onSignIn }: { onSignIn: () => void }) {
           <a href="#how" className="mm-topbar__link mm-hide-sm">
             How it works
           </a>
+          <Link href="/blog" className="mm-topbar__link">
+            Blog
+          </Link>
           <button type="button" className="mm-btn mm-btn--glass mm-btn--sm" onClick={onSignIn}>
             Sign in
           </button>

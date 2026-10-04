@@ -173,6 +173,22 @@ instead, add looping audio files at `public/sounds/dawn-lake.mp3`,
 `day-meadow.mp3`, `golden-shore.mp3` and `night-aurora.mp3`; they're picked up
 automatically. Use only audio you have the rights to.
 
+## Blog
+
+The blog lives at [/blog](https://mymoodly.space/blog). Posts are typed data,
+not HTML, so they can't inject markup.
+
+**Adding a post:** create a file in `app/blog/posts/` (copy an existing one),
+then register it in `ALL_POSTS` in `app/blog/lib/posts.ts`. The index, sitemap
+(`/sitemap.xml`) and RSS feed (`/blog/feed.xml`) pick it up automatically.
+Body text supports `**bold**`, `*italic*` and `[links](https://…)`. Cite
+sources for any health claim, and set `adsAllowed: false` on posts about
+crisis, self-harm or grief.
+
+**Ads:** slots are built in but off. See `app/blog/lib/ads.ts` for the
+placement rules and the switch, and add `?ads=preview` to any blog URL to see
+where they sit. Update the Privacy Policy before turning them on.
+
 ## Privacy and safety
 
 - Conversation partners see only each other's rotating name. Report and block

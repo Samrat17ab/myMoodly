@@ -12,6 +12,7 @@ export function SiteFooter({ onGuide }: { onGuide: () => void }) {
         <span className="mm-fine">myMoodly, {new Date().getFullYear()}</span>
       </div>
       <nav className="mm-footer__nav">
+        <Link href="/blog">Blog</Link>
         <Link href="/privacy">Privacy</Link>
         <Link href="/terms">Terms</Link>
         <button type="button" className="mm-footer__navbtn" onClick={onGuide}>
