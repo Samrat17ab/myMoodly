@@ -1,5 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AccessAuthEnv } from "./access-auth";
+import { CLOSED_MESSAGE, openHoursState } from "../app/lib/openHours";
+import { ADMIN_EMAILS, isAdminEmail } from "./admin-auth";
 import { HARMFUL_MESSAGE_NOTICE, classifyMessage, classifyWithRecent } from "./harmfulLanguage";
 import { ensureNickname } from "./nickname";
 
@@ -297,6 +299,20 @@ async function ticketResponse(d1: D1Database, ticket: TicketRow, email: string) 
   };
 }
 
+// With nightly hours switched on (app/lib/openHours.ts), matching runs only
+// from 9 PM to 3 AM IST. Admins may search at any time so the app can be
+// tested by day, but outside open hours they're only matched with each other.
+function matchingClosedFor(email: string) {
+  return !openHoursState().open && !isAdminEmail(email);
+}
+
+function closedResponse(extra: Record<string, unknown> = {}, status = 200) {
+  return Response.json(
+    { ...extra, status: "closed", closed: true, error: CLOSED_MESSAGE, opensAt: openHoursState().opensAt },
+    { status },
+  );
+}
+
 export class Matchmaker extends DurableObject<RealtimeEnv> {
   // Every join/status/cancel call from every user worldwide funnels through
   // this single object, so schema setup and the global stale-state sweep
@@ -339,6 +355,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
   }
 
   private async join(email: string, payload: Record<string, unknown>) {
+    if (matchingClosedFor(email)) return closedResponse({}, 403);
     const checkInId = typeof payload.checkInId === "string" ? payload.checkInId : "";
     const matchMode = payload.matchMode;
     const quadrant = payload.quadrant;
@@ -413,6 +430,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
 
   private async status(email: string, payload: Record<string, unknown>) {
     const ticketId = typeof payload.ticketId === "string" ? payload.ticketId : "";
+    if (matchingClosedFor(email)) return this.closeTicket(email, ticketId);
     // Expires this one ticket inline (by primary key, so it's cheap) rather
     // than waiting on the next periodic sweep, so the polling user still
     // sees "expired" promptly. The sweep remains as a backstop for tickets
@@ -486,6 +504,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
   // they settled for.
   private async relax(email: string, payload: Record<string, unknown>) {
     const ticketId = typeof payload.ticketId === "string" ? payload.ticketId : "";
+    if (matchingClosedFor(email)) return this.closeTicket(email, ticketId);
     await this.env.DB
       .prepare(
         `UPDATE matchmaking_tickets
@@ -509,6 +528,9 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
   }
 
   private async tryMatch(email: string, ticketId: string) {
+    if (matchingClosedFor(email)) return;
+    // Outside open hours only admins get here, and only admins may pair up.
+    const adminsOnly = !openHoursState().open;
     const current = await this.env.DB
       .prepare(
         `SELECT id, user_email, match_mode, quadrant, languages, relaxed_at
@@ -558,6 +580,7 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
              WHERE (blocker_email = ? AND blocked_email = mt.user_email)
                 OR (blocker_email = mt.user_email AND blocked_email = ?)
            )
+           AND (? = 0 OR mt.user_email IN (${ADMIN_EMAILS.map(() => "?").join(", ")}))
          ORDER BY mt.created_at ASC
          LIMIT 1`,
       )
@@ -574,6 +597,8 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
         current.quadrant,
         email,
         email,
+        adminsOnly ? 1 : 0,
+        ...ADMIN_EMAILS,
       )
       .first<WaitingTicketRow>();
     if (!candidate) return;
@@ -594,6 +619,31 @@ export class Matchmaker extends DurableObject<RealtimeEnv> {
       current.user_email,
       candidate.user_email,
     );
+  }
+
+  // After 3 AM a still-waiting search is closed for the night. A ticket that
+  // was matched just before closing keeps its conversation.
+  private async closeTicket(email: string, ticketId: string) {
+    await this.env.DB
+      .prepare(
+        `UPDATE matchmaking_tickets
+         SET status = 'expired', updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND user_email = ? AND status = 'waiting'`,
+      )
+      .bind(ticketId, email)
+      .run();
+    const ticket = await this.env.DB
+      .prepare(
+        `SELECT id, status, conversation_id FROM matchmaking_tickets
+         WHERE id = ? AND user_email = ? LIMIT 1`,
+      )
+      .bind(ticketId, email)
+      .first<TicketRow>();
+    if (!ticket) {
+      return Response.json({ error: "Matchmaking ticket not found" }, { status: 404 });
+    }
+    if (ticket.status === "matched") return Response.json(await ticketResponse(this.env.DB, ticket, email));
+    return closedResponse({ ticketId, canRelax: false });
   }
 
   private async cancel(email: string, payload: Record<string, unknown>) {
@@ -693,6 +743,7 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
     server.send(JSON.stringify({
       type: "ready",
       expiresAt: expiresAtMs,
+      canExtend: await this.canExtend(),
       history: history.results.map((message) => ({
         id: message.id,
         text: message.body,
@@ -844,7 +895,24 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
   // Extends the chat by another full window, but only once every current
   // member has separately asked to -- silence (or running out the clock)
   // means the chat simply ends on schedule.
+  // During open hours a chat can be extended any number of times; after
+  // closing, only once more.
+  private async canExtend() {
+    return openHoursState().open || !(await this.ctx.storage.get<boolean>("extendedAfterClose"));
+  }
+
+  private sendTo(email: string, payload: Record<string, unknown>) {
+    for (const peer of this.ctx.getWebSockets()) {
+      const peerAttachment = peer.deserializeAttachment() as ConnectionAttachment | null;
+      if (peer.readyState === WebSocket.OPEN && peerAttachment?.email === email) peer.send(JSON.stringify(payload));
+    }
+  }
+
   private async handleExtendRequest(attachment: ConnectionAttachment) {
+    if (!(await this.canExtend())) {
+      this.sendTo(attachment.email, { type: "error", message: "It's past 3 AM IST, so this conversation can't be extended again tonight." });
+      return;
+    }
     const members = await this.env.DB
       .prepare("SELECT user_email FROM conversation_members WHERE conversation_id = ?")
       .bind(attachment.conversationId)
@@ -888,8 +956,9 @@ export class ChatRoom extends DurableObject<RealtimeEnv> {
       .bind(newExpiresAtIso, attachment.conversationId)
       .run();
     await this.ctx.storage.delete("extendRequests");
+    if (!openHoursState().open) await this.ctx.storage.put("extendedAfterClose", true);
     await this.ctx.storage.setAlarm(newExpiresAtMs);
-    this.broadcast({ type: "extended", expiresAt: newExpiresAtMs });
+    this.broadcast({ type: "extended", expiresAt: newExpiresAtMs, canExtend: await this.canExtend() });
   }
 
   private broadcast(payload: Record<string, unknown>) {

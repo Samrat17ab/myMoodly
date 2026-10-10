@@ -1,0 +1,76 @@
+/* Nightly opening hours: the moonrise countdown and the live "we're open" state. */
+
+.mm-night {
+  --mm-night-moon: #f1e3b8;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) 1fr;
+  align-items: center;
+  gap: 22px;
+  box-sizing: border-box;
+  max-width: 560px;
+  padding: 18px 26px 18px 18px;
+  border-radius: var(--mm-r-panel);
+  box-shadow: 0 30px 70px -40px rgba(18, 55, 48, 0.45);
+  overflow: hidden;
+}
+[data-tone='dark'] .mm-night { --mm-night-moon: #f6ebc6; }
+.mm-night--hero { margin-top: 6px; }
+
+.mm-night__sky { width: 100%; height: auto; display: block; overflow: visible; }
+.mm-night__sky circle:not([fill]) { fill: var(--mm-ink); }
+.mm-night__star { animation: mm-twinkle 4.2s ease-in-out infinite; }
+.mm-night__arc { fill: none; stroke: var(--mm-line-strong); stroke-width: 1.2; stroke-dasharray: 0.012 0.018; }
+.mm-night__arc--done { stroke: var(--mm-sage-deep); stroke-width: 1.6; stroke-linecap: round; transition: stroke-dasharray 1s var(--mm-ease); }
+[data-tone='dark'] .mm-night__arc--done { stroke: var(--mm-night-moon); }
+.mm-night__horizon { stroke: var(--mm-line-strong); stroke-width: 1; }
+.mm-night__glow { animation: mm-moon-breathe 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+
+.mm-night__body { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.mm-night__status { margin: 0; display: inline-flex; align-items: center; gap: 9px; font-size: 14px; color: var(--mm-text-2); }
+.mm-night__title { margin: 0; font: 400 26px/1.15 var(--mm-font-display); color: var(--mm-ink); }
+.mm-night__fine { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--mm-text-3); }
+.mm-night__cal { margin-top: 4px; display: inline-flex; align-items: center; gap: 8px; }
+
+.mm-night__clock { display: flex; align-items: flex-start; gap: 4px; }
+.mm-night__group { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
+.mm-night__pair { display: inline-flex; }
+.mm-night__digit {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  width: 0.62em;
+  height: 1.12em;
+  overflow: hidden;
+  font: 300 44px/1.12 var(--mm-font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--mm-ink);
+}
+.mm-night__digit > span { display: block; }
+.mm-night__unit { margin-top: 2px; font-size: 10.5px; letter-spacing: 0.04em; color: var(--mm-text-3); }
+.mm-night__colon { position: absolute; right: -10px; top: 4px; font: 300 36px/1 var(--mm-font-display); color: var(--mm-text-3); }
+.mm-night__group:not(:last-child) { margin-right: 14px; }
+
+.mm-night.is-open { box-shadow: 0 30px 80px -36px color-mix(in srgb, var(--mm-night-moon) 70%, transparent); }
+.mm-night__pulse { position: relative; width: 9px; height: 9px; border-radius: 50%; background: #6fcf97; }
+.mm-night__pulse::after { content: ''; position: absolute; inset: -5px; border-radius: 50%; border: 1.5px solid #6fcf97; animation: mm-pulse-ring 2.4s ease-out infinite; }
+
+@keyframes mm-twinkle { 0%, 100% { opacity: var(--o, 0.8); } 50% { opacity: 0.25; } }
+@keyframes mm-moon-breathe { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.18); opacity: 1; } }
+@keyframes mm-pulse-ring { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(1.6); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-night__star, .mm-night__glow, .mm-night__pulse::after { animation: none; }
+  .mm-night__arc--done { transition: none; }
+}
+
+/* Closed: signed-in home shows the countdown where the check-in button was. */
+.mm-home__closed { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.mm-home__testmode { margin: 0; font-size: 13px; color: var(--mm-text-3); }
+
+@media (max-width: 720px) {
+  .mm-night { grid-template-columns: 1fr; gap: 6px; padding: 16px 20px 20px; max-width: 100%; }
+  .mm-night__sky { max-width: 160px; margin: 0 auto -6px; }
+  .mm-night__body { align-items: center; text-align: center; }
+  .mm-night__digit { font-size: 40px; }
+}

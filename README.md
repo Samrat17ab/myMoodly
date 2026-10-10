@@ -48,6 +48,17 @@ one tap away on every screen.
 - A closing reflection with a before/after mood map and a short survey, then
   a one-tap path to the next conversation
 
+**Nightly opening hours**
+- Matching is open every night from 9 PM to 3 AM IST, so people arrive
+  together instead of waiting alone
+- Outside those hours the home page shows a moonrise countdown in the
+  visitor's own time zone, with an "Add to calendar" reminder
+- At 3 AM, waiting searches close and running chats finish their timer
+  (with one more extension allowed if both people want it)
+- One switch turns it all on or off: `NIGHT_HOURS_ENABLED` in
+  [app/lib/openHours.ts](app/lib/openHours.ts). With `false`, matching runs
+  around the clock as before.
+
 **Safety**
 - Report and block in every conversation; three distinct reports lead to a
   permanent ban
@@ -145,12 +156,13 @@ in place of a session, which lets the integration tests simulate users.
 ## Testing
 
 ```bash
-npm test          # build, then unit tests (moderation, contact details, rendering)
+npm test          # build, then unit tests (moderation, contact details, opening hours, rendering)
 npm run lint
 ```
 
 With the local server running, the integration and load tests exercise real
-matching and chat:
+matching and chat. While nightly hours are switched on, run them between 9 PM
+and 3 AM IST, or set `NIGHT_HOURS_ENABLED = false` locally first:
 
 ```bash
 MOODLY_BASE_URL=http://localhost:3000 node tests/realtime-integration.mjs

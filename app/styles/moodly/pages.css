@@ -132,3 +132,9 @@ button.mm-link,
 .mm-footer__nav .mm-help { min-height: 44px; }
 .mm-logo { min-height: 44px; }
 button.mm-link--muted { padding-inline: 8px; }
+
+/* Top bar on phones: keep "Sign in" on one line next to the logo and Blog link. */
+.mm-topbar__nav .mm-btn { white-space: nowrap; }
+@media (max-width: 400px) {
+  .mm-topbar__nav .mm-topbar__link { padding: 12px 8px; }
+}

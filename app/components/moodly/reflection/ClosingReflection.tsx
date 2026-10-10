@@ -19,6 +19,8 @@ interface Props {
   ready: boolean;
   /** conversations left today */
   remaining: number;
+  /** the night has closed (past 3 AM IST): no new conversations until 9 PM */
+  closed?: boolean;
   /** the word from this conversation's check-in */
   word?: string | null;
   /**
@@ -43,12 +45,12 @@ export function shiftText(before: MoodPoint, after: MoodPoint, moved: boolean) {
   return 'Still stirred up. Checking in again later can help.';
 }
 
-export function ClosingReflection({ partnerName, before, children, ready, remaining, word, onNext, onSkip, saving }: Props) {
+export function ClosingReflection({ partnerName, before, children, ready, remaining, closed, word, onNext, onSkip, saving }: Props) {
   const [after, setAfter] = useState<MoodPoint>(before);
   const [moved, setMoved] = useState(false);
   // Light moved to a different feeling area: suggest checking in afresh first.
   const moodChanged = moved && quadrantOf(after) !== quadrantOf(before);
-  const canTalk = remaining > 0;
+  const canTalk = remaining > 0 && !closed;
 
   return (
     <div className="mm-reflect">
@@ -114,7 +116,9 @@ export function ClosingReflection({ partnerName, before, children, ready, remain
                 </>
               ) : (
                 <>
-                  <p className="mm-reflect__next-title">That was your last conversation for today.</p>
+                  <p className="mm-reflect__next-title">
+                    {closed ? "That's it for tonight. We open again at 9 PM IST." : 'That was your last conversation for today.'}
+                  </p>
                   <div className="mm-reflect__actions">
                     <button type="button" className="mm-btn mm-btn--primary" onClick={() => onNext('home', after)} disabled={saving}>
                       {saving ? 'Saving…' : 'Back home'}

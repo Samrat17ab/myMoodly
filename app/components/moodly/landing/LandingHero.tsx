@@ -5,6 +5,8 @@ import { HelpButton } from '../HelpButton';
 import { Logo } from '../Logo';
 import { SceneControls } from '../SceneControls';
 import { Sanctuary } from '../sanctuary/Sanctuary';
+import { NightCountdown } from '../openHours/NightCountdown';
+import type { LiveOpenHours } from '../openHours/useOpenHours';
 
 const DRIFTING = [
   { text: 'quietly hopeful', left: '79%', top: '28%', delay: '0s' },
@@ -12,7 +14,7 @@ const DRIFTING = [
   { text: "can't sleep tonight", left: '83%', top: '45%', delay: '-12s' },
 ];
 
-export function LandingHero({ onSignIn }: { onSignIn: () => void }) {
+export function LandingHero({ onSignIn, hours }: { onSignIn: () => void; hours?: LiveOpenHours | null }) {
   return (
     <section className="mm-hero">
       <Sanctuary mode="full" fixed={false} />
@@ -51,6 +53,7 @@ export function LandingHero({ onSignIn }: { onSignIn: () => void }) {
             See how it works
           </a>
         </div>
+        {hours?.enabled && <NightCountdown hours={hours} variant="hero" />}
         <p className="mm-fine mm-rise mm-d3">Free, for adults 18 and over. Not a crisis service.</p>
       </div>
 

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { ensureDbSchema, getD1 } from "@/db";
 import { CONTACT_DETAILS_MESSAGE, findContactDetail } from "@/app/lib/contactDetails";
+import { isAdminEmail } from "@/worker/admin-auth";
 import { recordAlert } from "@/worker/alerts";
 import { HARMFUL_NOTE_NOTICE, isHarmful } from "@/worker/harmfulLanguage";
 import {
@@ -100,6 +101,8 @@ export async function GET(request: Request) {
         : null,
       nickname,
       usage: Number(usageRow?.count ?? 0),
+      // Admins can match outside open hours (to test the app by day).
+      isAdmin: isAdminEmail(email),
     });
   } catch (error) {
     return errorResponse(error);

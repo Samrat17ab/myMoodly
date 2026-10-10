@@ -1,5 +1,6 @@
 'use client';
 
+import { NIGHT_HOURS_ENABLED } from '@/app/lib/openHours';
 import { IconBack } from '../Icons';
 import { PageShell, type HeaderNav } from './PageShell';
 
@@ -32,7 +33,9 @@ export function Guide({ nav, onBack, onLogo }: { nav: HeaderNav | null; onBack: 
           </li>
         ))}
       </ol>
-      <p className="mm-fine">10 conversations a day, free for everyone.</p>
+      <p className="mm-fine">
+        {NIGHT_HOURS_ENABLED ? 'Open every night, 9 PM – 3 AM IST. ' : ''}10 conversations a day, free for everyone.
+      </p>
     </PageShell>
   );
 }

@@ -28,6 +28,8 @@ import { quadrantOfWord } from "@/app/components/moodly/lib/words";
 import { EMAIL_SIGNIN_ENABLED } from "@/app/lib/config";
 import { emptyProfile, initialsFor, type Profile } from "@/app/lib/profile";
 import { PATH_VIEW, VIEW_PATH, type View } from "@/app/lib/routes";
+import { CLOSED_MESSAGE } from "@/app/lib/openHours";
+import { useOpenHours } from "@/app/components/moodly/openHours/useOpenHours";
 
 const DAILY_LIMIT = 10;
 const CHAT_TOTAL_SECONDS = 1200;
@@ -46,6 +48,7 @@ type ChatMessage = {
 };
 type RealtimePacket = {
   type?: "ready" | "message" | "presence" | "ended" | "error" | "extended" | "extend-requested";
+  canExtend?: boolean;
   history?: ChatMessage[];
   message?: ChatMessage | string;
   online?: number;
@@ -137,6 +140,11 @@ function MoodlyScreens() {
   const [reportDone, setReportDone] = useState(false);
   const [reportSending, setReportSending] = useState(false);
   const [toast, setToast] = useState("");
+  // Nightly opening hours (app/lib/openHours.ts). Admins can test any time.
+  const hours = useOpenHours();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const closedNow = Boolean(hours && !hours.open && !isAdmin);
+  const [canExtend, setCanExtend] = useState(true);
   const [matchFound, setMatchFound] = useState(false);
   const [survey, setSurvey] = useState({ understood:"", change:"", partnerRating:"" });
   const [checkInId, setCheckInId] = useState("");
@@ -169,6 +177,16 @@ function MoodlyScreens() {
       historyPushesRef.current += 1;
     }
   }, []);
+
+  // The night closes at 3 AM IST: anyone still on the check-in goes home.
+  useEffect(() => {
+    if (view !== "checkin" || !closedNow) return;
+    const leaveClosedCheckIn = () => {
+      setToast(CLOSED_MESSAGE);
+      navigate("home");
+    };
+    leaveClosedCheckIn();
+  }, [view, closedNow, navigate]);
 
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
@@ -233,6 +251,7 @@ function MoodlyScreens() {
       }));
       setEmail(authenticatedEmail);
       setNickname(typeof data.nickname === "string" ? data.nickname : "");
+      setIsAdmin(data.isAdmin === true);
       setOtp("");
       setOtpSent(false);
       if (data.profile) {
@@ -286,6 +305,11 @@ function MoodlyScreens() {
         if (data.status === "matched" && data.conversationId) {
           active = false;
           scheduleMatchedChat(data);
+        } else if (data.status === "closed") {
+          // It's past 3 AM IST: the search is closed for tonight.
+          active = false;
+          setToast(CLOSED_MESSAGE);
+          navigate("home");
         } else if (data.status === "expired" || data.status === "cancelled") {
           active = false;
           setToast("No match was found this time. You can try again.");
@@ -355,6 +379,7 @@ function MoodlyScreens() {
         if (payload.type === "ready") {
           if (Array.isArray(payload.history)) setMessages(payload.history as ChatMessage[]);
           if (typeof payload.expiresAt === "number") setChatExpiresAt(payload.expiresAt);
+          setCanExtend(payload.canExtend !== false);
         } else if (payload.type === "message" && typeof payload.message === "object") {
           const incoming = payload.message as ChatMessage;
           setMessages(current =>
@@ -366,6 +391,7 @@ function MoodlyScreens() {
           setOnlineCount(Number(payload.online ?? 0));
         } else if (payload.type === "extended") {
           if (typeof payload.expiresAt === "number") setChatExpiresAt(payload.expiresAt);
+          setCanExtend(payload.canExtend !== false);
           setExtendRequestedByMe(false);
           setExtendRequestedByPartner(false);
           setToast("You're both continuing — 20 more minutes added.");
@@ -497,6 +523,7 @@ function MoodlyScreens() {
       setOtp("");
       setOtpSent(false);
       setProfile(emptyProfile);
+      setIsAdmin(false);
       setUsage(0);
       navigate("welcome", { replace: true });
       setToast("You've been signed out.");
@@ -513,6 +540,7 @@ function MoodlyScreens() {
       setOtp("");
       setOtpSent(false);
       setProfile(emptyProfile);
+      setIsAdmin(false);
       setUsage(0);
       navigate("welcome", { replace: true });
       setToast("Your account and data have been deleted.");
@@ -559,6 +587,8 @@ function MoodlyScreens() {
       return true;
     } catch (error) {
       setToast(error instanceof Error ? error.message : "Could not start matchmaking.");
+      // Closed for the night: nothing to retry until 9 PM IST.
+      if (error instanceof Error && error.message === CLOSED_MESSAGE) navigate("home");
       return false;
     } finally {
       setStartingQueue(false);
@@ -636,7 +666,7 @@ function MoodlyScreens() {
       navigate("paywall");
     } else if (next === "again") {
       // If the search can't start, land on the prefilled check-in to retry.
-      if (!(await startQueue(checkIn))) navigate("checkin");
+      if (!(await startQueue(checkIn)) && !closedNow) navigate("checkin");
     } else {
       const quadrant = quadrantOf(after);
       setCheckIn({
@@ -698,7 +728,7 @@ function MoodlyScreens() {
   if (view === "welcome") {
     screen = (
       <main>
-        <LandingHero onSignIn={() => navigate("auth")} />
+        <LandingHero onSignIn={() => navigate("auth")} hours={hours} />
         <HowItWorks />
         <TryMoodMap onSignIn={() => navigate("auth")} />
         <PrivacySection />
@@ -772,6 +802,8 @@ function MoodlyScreens() {
         remaining={remaining}
         limit={DAILY_LIMIT}
         onCheckIn={() => navigate(usage >= DAILY_LIMIT ? "paywall" : "checkin")}
+        hours={hours}
+        isAdmin={isAdmin}
         onHome={nav.onHome}
         onGuide={nav.onGuide}
         onAccount={nav.onAccount}
@@ -836,7 +868,7 @@ function MoodlyScreens() {
           onEnd={endChat}
           onReport={() => setReport(true)}
           onBlock={() => void submitBlock()}
-          endingNotice={extendNotice}
+          endingNotice={canExtend ? extendNotice : undefined}
         />
         <AnimatePresence>
           {report && (
@@ -859,6 +891,7 @@ function MoodlyScreens() {
         ready={Boolean(survey.understood && survey.change && survey.partnerRating)}
         remaining={remaining}
         word={checkIn?.word}
+        closed={closedNow}
         saving={surveySaving || startingQueue}
         onNext={(next, after) => void submitSurvey(next, after)}
         onSkip={() => navigate("home")}
