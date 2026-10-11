@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { CLOSE_HOUR_IST, OPEN_HOUR_IST } from '@/app/lib/openHours';
 import { EASE_OUT } from '../lib/motion';
-import { downloadOpenHoursCalendar } from './calendar';
+import { downloadOpenHoursCalendar, googleCalendarUrl } from './calendar';
 import type { LiveOpenHours } from './useOpenHours';
 
 const HOUR = 3_600_000;
@@ -192,9 +192,14 @@ export function NightCountdown({ hours, variant = 'card', className }: Props) {
             </p>
           </>
         )}
-        <button type="button" className="mm-btn mm-btn--glass mm-btn--sm mm-night__cal" onClick={() => downloadOpenHoursCalendar(hours.opensAt, hours.closesAt)}>
-          <CalendarIcon /> {hours.open ? 'Remind me nightly' : 'Add to calendar'}
-        </button>
+        <div className="mm-night__calrow">
+          <a className="mm-btn mm-btn--glass mm-btn--sm mm-night__cal" href={googleCalendarUrl(hours.opensAt, hours.closesAt)} target="_blank" rel="noopener noreferrer">
+            <CalendarIcon /> {hours.open ? 'Remind me · Google' : 'Google Calendar'}
+          </a>
+          <button type="button" className="mm-btn mm-btn--quiet mm-btn--sm mm-night__cal" onClick={() => downloadOpenHoursCalendar(hours.opensAt, hours.closesAt)}>
+            Apple / Outlook (.ics)
+          </button>
+        </div>
       </div>
     </motion.section>
   );

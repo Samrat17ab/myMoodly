@@ -4,6 +4,20 @@
 
 const stamp = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 
+// One tap, no file: opens Google Calendar with the daily event filled in. Works
+// inside in-app browsers (LinkedIn, Instagram, Reddit, X) that block downloads.
+export function googleCalendarUrl(opensAt: number, closesAt: number) {
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: 'myMoodly is open',
+    dates: `${stamp(opensAt)}/${stamp(closesAt)}`,
+    details: 'Open every night from 9 PM to 3 AM IST. Name how you feel and talk it through with one real person. https://mymoodly.space',
+    location: 'https://mymoodly.space',
+    recur: 'RRULE:FREQ=DAILY',
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 export function downloadOpenHoursCalendar(opensAt: number, closesAt: number) {
   const ics = [
     'BEGIN:VCALENDAR',
@@ -26,7 +40,7 @@ export function downloadOpenHoursCalendar(opensAt: number, closesAt: number) {
     'END:VALARM',
     'END:VEVENT',
     'END:VCALENDAR',
-  ].join('\r\n');
+  ].join('\r\n') + '\r\n'; // the standard wants every line, including the last, to end in CRLF
 
   const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
   const link = document.createElement('a');
