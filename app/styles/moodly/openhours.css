@@ -74,6 +74,3 @@
   .mm-night__body { align-items: center; text-align: center; }
   .mm-night__digit { font-size: 40px; }
 }
-.mm-night__calrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
-.mm-night__calrow .mm-night__cal { margin-top: 0; }
-@media (max-width: 720px) { .mm-night__calrow { justify-content: center; } }
