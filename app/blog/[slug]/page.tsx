@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdSlot } from "@/app/components/blog/AdSlot";
 import { ArticleBody } from "@/app/components/blog/ArticleBody";
+import { BlogAnalytics } from "@/app/components/blog/BlogAnalytics";
 import { CheckInPanel } from "@/app/components/blog/CheckInCta";
 import { JsonLd } from "@/app/components/blog/JsonLd";
 import { PostCard, PostMeta, categoryTone } from "@/app/components/blog/PostCard";
@@ -49,6 +50,7 @@ export default async function BlogPost({ params, searchParams }: Params) {
   return (
     <main className="mm-blog-main mm-blog-main--article">
       <ReadingProgress targetId="mm-article" />
+      <BlogAnalytics slug={post.slug} articleId="mm-article" />
       <JsonLd
         data={{
           "@context": "https://schema.org",

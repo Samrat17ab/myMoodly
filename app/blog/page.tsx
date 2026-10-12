@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { AdSlot } from "@/app/components/blog/AdSlot";
+import { BlogAnalytics } from "@/app/components/blog/BlogAnalytics";
+import { BLOG_INDEX_SLUG } from "@/app/lib/blogAnalytics";
 import { CheckInPanel } from "@/app/components/blog/CheckInCta";
 import { JsonLd } from "@/app/components/blog/JsonLd";
 import { PostCard } from "@/app/components/blog/PostCard";
@@ -31,6 +33,7 @@ export default async function BlogIndex({ searchParams }: { searchParams: Promis
 
   return (
     <main className="mm-blog-main">
+      <BlogAnalytics slug={BLOG_INDEX_SLUG} />
       <JsonLd
         data={{
           "@context": "https://schema.org",

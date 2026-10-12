@@ -79,6 +79,13 @@ export default function PrivacyPolicy() {
             security events, and cookie data, to deliver the service, maintain
             sessions, prevent abuse, and diagnose failures.
           </p>
+          <p>
+            On our blog, we count page views, whether an article was read most of
+            the way through, clicks on &quot;Check in&quot;, and the website a reader came
+            from. This is anonymous: we don&apos;t store IP addresses, use cookies, or
+            link it to an account. Each visit is counted with a code that changes
+            daily and can&apos;t be traced back to you.
+          </p>
         </section>
 
         <section>

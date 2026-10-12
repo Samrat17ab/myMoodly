@@ -138,3 +138,6 @@ button.mm-link--muted { padding-inline: 8px; }
 @media (max-width: 400px) {
   .mm-topbar__nav .mm-topbar__link { padding: 12px 8px; }
 }
+
+/* Admin: tables inside a section fill the width instead of shrinking to their content. */
+.admin-mood-section .admin-table-wrap { width: 100%; box-sizing: border-box; }

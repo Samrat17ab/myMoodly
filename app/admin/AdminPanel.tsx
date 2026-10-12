@@ -46,8 +46,13 @@ type RetentionRow = { mood_change: string; n: number; returned: number };
 type RelaxedRow = { matched_relaxed: number; n: number; better: number; same: number; worse: number };
 type MoodPairsData = { pairs: MoodPairRow[]; byMode: ModeRow[]; retentionByFirstOutcome: RetentionRow[]; byRelaxed: RelaxedRow[] };
 type AlertRow = { id: string; type: string; message: string; created_at: string };
+type BlogTotals = { views_all: number; views_7d: number; views_today: number; readers_today: number; readers_7d: number; reads_7d: number; cta_7d: number };
+type BlogPostRow = { slug: string; title: string; views: number; readers: number; reads: number; cta: number; last_seen: string };
+type BlogSourceRow = { source: string; views: number; readers: number; cta: number };
+type BlogDayRow = { day: string; views: number; readers: number; reads: number; cta: number };
+type BlogData = { totals: BlogTotals; posts: BlogPostRow[]; sources: BlogSourceRow[]; daily: BlogDayRow[] };
 
-const TABS = ["Overview", "Alerts", "Mood patterns", "Reports", "Bans", "Blocks", "Feedback", "Deleted accounts"] as const;
+const TABS = ["Overview", "Blog", "Alerts", "Mood patterns", "Reports", "Bans", "Blocks", "Feedback", "Deleted accounts"] as const;
 type Tab = typeof TABS[number];
 
 async function adminFetch(view: string) {
@@ -87,6 +92,7 @@ export default function AdminPanel() {
   const [deleted, setDeleted] = useState<DeletedRow[] | null>(null);
   const [moodPairs, setMoodPairs] = useState<MoodPairsData | null>(null);
   const [alerts, setAlerts] = useState<AlertRow[] | null>(null);
+  const [blog, setBlog] = useState<BlogData | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -101,6 +107,7 @@ export default function AdminPanel() {
     setError("");
     try {
       if (next === "Overview" && !overview) setOverview(await adminFetch("overview"));
+      if (next === "Blog" && !blog) setBlog(await adminFetch("blog"));
       if (next === "Alerts" && !alerts) setAlerts((await adminFetch("alerts")).alerts);
       if (next === "Mood patterns" && !moodPairs) setMoodPairs(await adminFetch("moodPairs"));
       if (next === "Reports" && !reports) setReports((await adminFetch("reports")).reports);
@@ -111,7 +118,7 @@ export default function AdminPanel() {
     } catch {
       setError("Could not load this data. Try again.");
     }
-  }, [overview, alerts, moodPairs, reports, bans, blocks, feedback, deleted]);
+  }, [overview, blog, alerts, moodPairs, reports, bans, blocks, feedback, deleted]);
 
   const unban = async (email: string) => {
     setBusy(true);
@@ -199,6 +206,67 @@ export default function AdminPanel() {
           <RatingCard label="Felt understood in the conversation" breakdown={overview.understoodBreakdown} options={["Yes", "Somewhat", "No"]} />
           <RatingCard label="How they felt compared to before" breakdown={overview.moodChangeBreakdown} options={["Better", "Same", "Worse"]} />
           <RatingCard label="Match quality" breakdown={overview.ratingBreakdown} options={["Great", "Okay", "Not for me"]} />
+        </section>
+      )}
+
+      {tab === "Blog" && blog && (
+        <section className="admin-mood-section">
+          <p className="admin-mood-note">Anonymous and cookie-free: no IP addresses or accounts are stored, and bots and link-preview crawlers are left out. A &quot;reader&quot; is one person on one day (the anonymous visitor code changes daily), so the same person reading on two days counts twice. &quot;Finished&quot; means they scrolled 75% of the article. Sources come from the link they clicked; add <code>?utm_source=linkedin</code> (or reddit, x) to links you share so in-app browsers that hide the referrer still show up correctly.</p>
+          <div className="admin-grid">
+            <StatCard label="Views today" value={blog.totals.views_today ?? 0} />
+            <StatCard label="Readers today" value={blog.totals.readers_today ?? 0} />
+            <StatCard label="Views (last 7 days)" value={blog.totals.views_7d ?? 0} />
+            <StatCard label="Readers (last 7 days)" value={blog.totals.readers_7d ?? 0} />
+            <StatCard label="Finished an article (7 days)" value={blog.totals.reads_7d ?? 0} />
+            <StatCard label="Clicked Check in from the blog (7 days)" value={blog.totals.cta_7d ?? 0} />
+            <StatCard label="Views (all time)" value={blog.totals.views_all ?? 0} />
+          </div>
+
+          <h3 className="admin-subhead">By post</h3>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Post</th><th>Views</th><th>Readers</th><th>Finished</th><th>Clicked Check in</th><th>Last visit</th></tr></thead>
+              <tbody>
+                {blog.posts.length === 0 && <tr><td colSpan={6} className="admin-empty">No blog visits recorded yet.</td></tr>}
+                {blog.posts.map((p) => (
+                  <tr key={p.slug}>
+                    <td className="admin-body-cell">{p.slug === "index" ? <b>{p.title}</b> : <a href={`/blog/${p.slug}`} target="_blank" rel="noreferrer">{p.title}</a>}</td>
+                    <td>{p.views}</td>
+                    <td>{p.readers}</td>
+                    <td>{p.slug === "index" ? "—" : pct(p.reads, p.readers)}</td>
+                    <td>{pct(p.cta, p.readers)}</td>
+                    <td>{p.last_seen ? formatDate(p.last_seen) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <h3 className="admin-subhead">Where readers came from (last 30 days)</h3>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Source</th><th>Views</th><th>Readers</th><th>Clicked Check in</th></tr></thead>
+              <tbody>
+                {blog.sources.length === 0 && <tr><td colSpan={4} className="admin-empty">No visits in the last 30 days.</td></tr>}
+                {blog.sources.map((r) => (
+                  <tr key={r.source}><td className="admin-cap">{r.source}</td><td>{r.views}</td><td>{r.readers}</td><td>{r.cta}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <h3 className="admin-subhead">Last 14 days</h3>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Day (UTC)</th><th>Views</th><th>Readers</th><th>Finished</th><th>Clicked Check in</th></tr></thead>
+              <tbody>
+                {blog.daily.length === 0 && <tr><td colSpan={5} className="admin-empty">No visits in the last 14 days.</td></tr>}
+                {blog.daily.map((d) => (
+                  <tr key={d.day}><td>{d.day}</td><td>{d.views}</td><td>{d.readers}</td><td>{d.reads}</td><td>{d.cta}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 

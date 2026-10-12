@@ -325,6 +325,28 @@ export function ensureDbSchema() {
       d1.prepare(
         "CREATE INDEX IF NOT EXISTS alerts_created_idx ON alerts (created_at)",
       ),
+      // Blog analytics: page views, finished reads and "Check in" clicks, with
+      // where the reader came from. No IP addresses or accounts are stored;
+      // `visitor` is a one-way hash keyed by a salt that rotates daily (see
+      // analytics_salts), so the same reader can't be linked across days.
+      d1.prepare(`CREATE TABLE IF NOT EXISTS blog_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        slug TEXT NOT NULL,
+        event TEXT NOT NULL,
+        source TEXT NOT NULL,
+        visitor TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS blog_events_created_idx ON blog_events (created_at)",
+      ),
+      d1.prepare(
+        "CREATE INDEX IF NOT EXISTS blog_events_slug_idx ON blog_events (slug, event)",
+      ),
+      d1.prepare(`CREATE TABLE IF NOT EXISTS analytics_salts (
+        day TEXT PRIMARY KEY NOT NULL,
+        salt TEXT NOT NULL
+      )`),
       d1.prepare(
         "CREATE INDEX IF NOT EXISTS matchmaking_tickets_status_created_idx ON matchmaking_tickets (status, created_at)",
       ),

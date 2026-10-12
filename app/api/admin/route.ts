@@ -5,6 +5,7 @@ import {
   type AccessAuthEnv,
 } from "@/worker/access-auth";
 import { isAdminEmail } from "@/worker/admin-auth";
+import { getPosts } from "@/app/blog/lib/posts";
 
 function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
@@ -199,6 +200,58 @@ export async function GET(request: Request) {
         byMode: byMode.results,
         retentionByFirstOutcome: retentionByFirstOutcome.results,
         byRelaxed: byRelaxed.results,
+      });
+    }
+
+    if (view === "blog") {
+      // `visitor` is a hash keyed by a daily salt, so a reader is unique per
+      // day: visitor || date counts "readers" (one per person per day).
+      const reader = "visitor || '|' || date(created_at)";
+      const [totals, perPost, sources, daily] = await d1.batch([
+        d1.prepare(
+          `SELECT
+             COUNT(*) FILTER (WHERE event = 'view') AS views_all,
+             COUNT(*) FILTER (WHERE event = 'view' AND created_at >= datetime('now', '-7 days')) AS views_7d,
+             COUNT(*) FILTER (WHERE event = 'view' AND created_at >= datetime('now', 'start of day')) AS views_today,
+             COUNT(DISTINCT CASE WHEN event = 'view' AND created_at >= datetime('now', 'start of day') THEN visitor END) AS readers_today,
+             COUNT(DISTINCT CASE WHEN event = 'view' AND created_at >= datetime('now', '-7 days') THEN ${reader} END) AS readers_7d,
+             COUNT(*) FILTER (WHERE event = 'read' AND created_at >= datetime('now', '-7 days')) AS reads_7d,
+             COUNT(*) FILTER (WHERE event = 'cta' AND created_at >= datetime('now', '-7 days')) AS cta_7d
+           FROM blog_events`,
+        ),
+        d1.prepare(
+          `SELECT slug,
+             COUNT(*) FILTER (WHERE event = 'view') AS views,
+             COUNT(DISTINCT CASE WHEN event = 'view' THEN ${reader} END) AS readers,
+             COUNT(*) FILTER (WHERE event = 'read') AS reads,
+             COUNT(*) FILTER (WHERE event = 'cta') AS cta,
+             MAX(created_at) AS last_seen
+           FROM blog_events GROUP BY slug ORDER BY views DESC`,
+        ),
+        d1.prepare(
+          `SELECT source,
+             COUNT(*) FILTER (WHERE event = 'view') AS views,
+             COUNT(DISTINCT CASE WHEN event = 'view' THEN ${reader} END) AS readers,
+             COUNT(*) FILTER (WHERE event = 'cta') AS cta
+           FROM blog_events WHERE created_at >= datetime('now', '-30 days')
+           GROUP BY source ORDER BY views DESC LIMIT 25`,
+        ),
+        d1.prepare(
+          `SELECT date(created_at) AS day,
+             COUNT(*) FILTER (WHERE event = 'view') AS views,
+             COUNT(DISTINCT CASE WHEN event = 'view' THEN visitor END) AS readers,
+             COUNT(*) FILTER (WHERE event = 'read') AS reads,
+             COUNT(*) FILTER (WHERE event = 'cta') AS cta
+           FROM blog_events WHERE created_at >= datetime('now', '-14 days')
+           GROUP BY day ORDER BY day DESC`,
+        ),
+      ]);
+      const titles = new Map<string, string>([["index", "Blog home"], ...getPosts().map((p) => [p.slug, p.title] as [string, string])]);
+      return Response.json({
+        totals: totals.results[0] ?? {},
+        posts: (perPost.results as { slug: string }[]).map((row) => ({ ...row, title: titles.get(row.slug) ?? row.slug })),
+        sources: sources.results,
+        daily: daily.results,
       });
     }
 
