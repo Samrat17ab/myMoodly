@@ -918,7 +918,7 @@ function MoodlyScreens() {
   } else if (view === "paywall") {
     screen = <LimitReached nav={nav} limit={DAILY_LIMIT} onBack={() => navigate("home")} />;
   } else if (view === "resources") {
-    screen = <HelpPage nav={email ? nav : null} country={profile.country} onBack={goBack} onLogo={() => navigate("welcome")} />;
+    screen = <HelpPage nav={email ? nav : null} onBack={goBack} onLogo={() => navigate("welcome")} />;
   } else if (view === "guide") {
     screen = <Guide nav={email ? nav : null} onBack={goBack} onLogo={() => navigate("welcome")} />;
   } else if (view === "settings") {
@@ -945,7 +945,7 @@ function MoodlyScreens() {
   return (
     <>
       {screen}
-      <HelpSheet country={profile.country} />
+      <HelpSheet />
       {toast && <div className="mm-toast" role="status" aria-live="polite">{toast}</div>}
     </>
   );

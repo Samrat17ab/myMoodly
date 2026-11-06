@@ -6,20 +6,17 @@ export interface CrisisResource {
   href: string;
 }
 
-/** Support lines shown in the help sheet. Numbers are unchanged; names and notes use gentle wording. */
-export function resourcesFor(country: string): CrisisResource[] {
-  if (country === 'Nepal') {
-    return [
-      { name: 'National helpline', detail: '1166', note: 'Free, confidential support, nationwide', href: 'tel:1166' },
-      { name: 'Police emergency', detail: '100', note: 'If you need urgent help', href: 'tel:100' },
-      { name: 'Ambulance', detail: '102', note: 'Emergency medical support', href: 'tel:102' },
-    ];
-  }
-  return [
-    { name: 'Local emergency services', detail: '112 / 911', note: 'Use the number available in your country', href: 'tel:112' },
-    { name: 'Find a helpline near you', detail: 'findahelpline.com', note: 'Verified helplines in 175+ countries', href: 'https://findahelpline.com' },
-  ];
-}
+/** India-only contacts shared by both help surfaces, independent of profile country.
+ * Verified 2026-11-06: Ministry of Home Affairs ERSS and the local helpline lookup.
+ * https://www.mha.gov.in/emergency-response-support-system-erss
+ * https://telemanas.mohfw.gov.in/home
+ */
+export const INDIA_RESOURCES: readonly CrisisResource[] = [
+  { name: 'Emergency services in India', detail: '112', note: 'For immediate danger or a police, fire or medical emergency', href: 'tel:112' },
+  { name: 'Tele-MANAS mental health support', detail: '14416', note: 'Free, confidential mental health support in India, available 24/7', href: 'tel:+9114416?oai_link_source=model_response_hotline' },
+];
+
+export const HELP_LOCATION = 'These numbers are for people currently in India. If you are outside India, contact your local emergency service or use the helpline directory below.';
 
 export const HELP_TIPS = [
   'Move to a place where other people are nearby.',

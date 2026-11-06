@@ -5,14 +5,13 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { IconClose } from './Icons';
 import { OPEN_HELP_EVENT } from './HelpButton';
 import { EASE_OUT } from './lib/motion';
-import { HELP_TIPS, resourcesFor } from './lib/resources';
+import { HELP_LOCATION, HELP_TIPS, INDIA_RESOURCES } from './lib/resources';
 
 /** Mount once at the app root. Every "Need help now?" button opens it. */
-export function HelpSheet({ country = '' }: { country?: string }) {
+export function HelpSheet() {
   const [open, setOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const lastFocus = useRef<Element | null>(null);
-  const resources = resourcesFor(country);
 
   useEffect(() => {
     const onOpen = () => {
@@ -55,8 +54,9 @@ export function HelpSheet({ country = '' }: { country?: string }) {
               If you feel unsafe, or things feel like too much to carry right now, please reach out straight away to someone who can help: your local emergency number or one of the lines below.
               myMoodly is peer support, not a crisis service.
             </p>
+            <p className="mm-sheet__text">{HELP_LOCATION}</p>
             <ul className="mm-sheet__list">
-              {resources.map((r) => (
+              {INDIA_RESOURCES.map((r) => (
                 <li key={r.name}>
                   <a className="mm-sheet__resource" href={r.href} target={r.href.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
                     <span className="mm-sheet__resource-name">

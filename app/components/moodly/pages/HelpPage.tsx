@@ -1,19 +1,17 @@
 'use client';
 
 import { IconBack } from '../Icons';
-import { HELP_FOOT, HELP_TIPS, resourcesFor } from '../lib/resources';
+import { HELP_FOOT, HELP_LOCATION, HELP_TIPS, INDIA_RESOURCES } from '../lib/resources';
 import { PageShell, type HeaderNav } from './PageShell';
 
 interface Props {
   nav: HeaderNav | null;
-  country: string;
   onBack: () => void;
   onLogo: () => void;
 }
 
 /** The /help page: the same content as the help sheet, for direct links. */
-export function HelpPage({ nav, country, onBack, onLogo }: Props) {
-  const resources = resourcesFor(country);
+export function HelpPage({ nav, onBack, onLogo }: Props) {
   return (
     <PageShell nav={nav} onLogo={onLogo}>
       <button type="button" className="mm-iconbtn mm-page__back" onClick={onBack} aria-label="Back">
@@ -25,8 +23,9 @@ export function HelpPage({ nav, country, onBack, onLogo }: Props) {
           If you feel unsafe, or things feel like too much to carry right now, please reach out straight away to someone who can help: your local emergency number or one of the lines below. myMoodly is peer support, not a crisis service.
         </p>
       </div>
+      <p className="mm-body">{HELP_LOCATION}</p>
       <ul className="mm-sheet__list">
-        {resources.map((r) => (
+        {INDIA_RESOURCES.map((r) => (
           <li key={r.name}>
             <a className="mm-sheet__resource" href={r.href} target={r.href.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
               <span className="mm-sheet__resource-name">
@@ -37,6 +36,9 @@ export function HelpPage({ nav, country, onBack, onLogo }: Props) {
           </li>
         ))}
       </ul>
+      <a className="mm-btn mm-btn--quiet" href="https://findahelpline.com" target="_blank" rel="noreferrer">
+        Find a helpline near you
+      </a>
       <section className="mm-page__section">
         <h2 className="mm-display mm-display--sm">While you reach out</h2>
         <ul className="mm-help-tips">
